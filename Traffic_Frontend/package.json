@@ -1,0 +1,17 @@
+{
+  "name": "traffic-frontend",
+  "version": "1.0.0",
+  "description": "ASP.NET Core MVC project with Mapbox GL JS integration",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/mapbox-gl": "^3.0.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "mapbox-gl": "^3.0.0"
+  }
+}
+

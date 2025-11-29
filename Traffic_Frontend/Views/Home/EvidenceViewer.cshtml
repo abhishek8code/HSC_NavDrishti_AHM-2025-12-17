@@ -1,0 +1,309 @@
+@{
+    ViewData["Title"] = "Evidence Viewer - Red Zone";
+    var lat = ViewBag.Latitude as double?;
+    var lon = ViewBag.Longitude as double?;
+    var apiUrl = ViewBag.BackendApiUrl as string ?? "http://localhost:8000";
+}
+
+<div class="container-fluid p-4">
+    <div class="row mb-3">
+        <div class="col-12">
+            <h2 class="text-danger">
+                <i class="bi bi-exclamation-triangle-fill"></i> Red Zone Evidence Viewer
+            </h2>
+            <p class="text-muted">
+                @if (lat.HasValue && lon.HasValue)
+                {
+                    <span>Location: @lat.Value.ToString("F6"), @lon.Value.ToString("F6")</span>
+                }
+                else
+                {
+                    <span>No location specified</span>
+                }
+            </p>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="text-center py-5" style="display: none;">
+        <div class="spinner-border text-danger" role="status">
+            <span class="visually-hidden">Loading evidence images...</span>
+        </div>
+        <p class="mt-3">Loading evidence images...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div id="errorMessage" class="alert alert-danger" style="display: none;" role="alert">
+        <strong>Error:</strong> <span id="errorText"></span>
+    </div>
+
+    <!-- No Images Message -->
+    <div id="noImagesMessage" class="alert alert-warning" style="display: none;" role="alert">
+        <strong>No Evidence Found:</strong> No images were found for this red zone cluster.
+    </div>
+
+    <!-- Image Carousel -->
+    <div id="imageCarouselContainer" style="display: none;">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="mb-0">
+                            <i class="bi bi-images"></i> Evidence Images
+                            <span id="imageCount" class="badge bg-light text-dark ms-2">0</span>
+                        </h5>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-light btn-sm" onclick="closeViewer()">
+                            <i class="bi bi-x-lg"></i> Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Image Carousel -->
+                <div id="carouselExample" class="carousel slide" data-bs-ride="carousel">
+                    <div class="carousel-inner" id="carouselInner">
+                        <!-- Images will be inserted here -->
+                    </div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#carouselExample" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#carouselExample" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>
+
+                <!-- Image Metadata -->
+                <div class="mt-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">
+                                <strong>Image:</strong> <span id="currentImageIndex">1</span> of <span id="totalImages">0</span>
+                            </small>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <small class="text-muted" id="imageMetadata">
+                                <!-- Metadata will be inserted here -->
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thumbnail Strip -->
+                <div class="mt-3">
+                    <div class="d-flex flex-wrap gap-2" id="thumbnailStrip">
+                        <!-- Thumbnails will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const backendApiUrl = '@apiUrl';
+        const clusterLat = @(lat.HasValue ? lat.Value.ToString("F10") : "null");
+        const clusterLon = @(lon.HasValue ? lon.Value.ToString("F10") : "null");
+
+        let evidenceImages = [];
+        let currentImageIndex = 0;
+
+        // Load evidence images on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (clusterLat !== null && clusterLon !== null) {
+                loadEvidenceImages(clusterLat, clusterLon);
+            } else {
+                showError('No location specified');
+            }
+        });
+
+        async function loadEvidenceImages(lat, lon) {
+            showLoading();
+            hideError();
+            hideNoImages();
+            hideCarousel();
+
+            try {
+                const response = await fetch(
+                    `${backendApiUrl}/cluster-evidence-images?lat=${lat}&lon=${lon}&radius_degrees=0.001`
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                evidenceImages = data.images || [];
+
+                if (evidenceImages.length === 0) {
+                    showNoImages();
+                } else {
+                    displayImages(evidenceImages);
+                }
+            } catch (error) {
+                console.error('Error loading evidence images:', error);
+                showError(error.message || 'Failed to load evidence images');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayImages(images) {
+            const carouselInner = document.getElementById('carouselInner');
+            const thumbnailStrip = document.getElementById('thumbnailStrip');
+            const imageCount = document.getElementById('imageCount');
+            const totalImages = document.getElementById('totalImages');
+
+            carouselInner.innerHTML = '';
+            thumbnailStrip.innerHTML = '';
+            imageCount.textContent = images.length;
+            totalImages.textContent = images.length;
+
+            images.forEach((image, index) => {
+                // Create carousel item
+                const carouselItem = document.createElement('div');
+                carouselItem.className = `carousel-item ${index === 0 ? 'active' : ''}`;
+                carouselItem.setAttribute('data-image-index', index);
+
+                const img = document.createElement('img');
+                img.src = convertFileUrlToWebPath(image.image_url);
+                img.className = 'd-block w-100';
+                img.style.maxHeight = '600px';
+                img.style.objectFit = 'contain';
+                img.alt = `Evidence image ${index + 1}`;
+                img.onerror = function() {
+                    this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23ddd" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E';
+                };
+
+                const caption = document.createElement('div');
+                caption.className = 'carousel-caption d-none d-md-block bg-dark bg-opacity-75 rounded p-2';
+                caption.innerHTML = `
+                    <p class="mb-0">
+                        <strong>Severity:</strong> ${image.severity !== null ? image.severity.toFixed(1) : 'N/A'} | 
+                        <strong>Distance:</strong> ${(image.distance * 111000).toFixed(1)}m
+                    </p>
+                `;
+
+                carouselItem.appendChild(img);
+                carouselItem.appendChild(caption);
+                carouselInner.appendChild(carouselItem);
+
+                // Create thumbnail
+                const thumbnail = document.createElement('div');
+                thumbnail.className = `thumbnail-item ${index === 0 ? 'active' : ''}`;
+                thumbnail.style.cssText = 'cursor: pointer; width: 80px; height: 60px; overflow: hidden; border: 2px solid #ddd; border-radius: 4px;';
+                thumbnail.onclick = () => goToImage(index);
+
+                const thumbImg = document.createElement('img');
+                thumbImg.src = convertFileUrlToWebPath(image.image_url);
+                thumbImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+                thumbImg.onerror = function() {
+                    this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="60"%3E%3Crect fill="%23ddd" width="80" height="60"/%3E%3C/svg%3E';
+                };
+
+                thumbnail.appendChild(thumbImg);
+                thumbnailStrip.appendChild(thumbnail);
+            });
+
+            // Update metadata for first image
+            updateImageMetadata(0);
+
+            // Listen for carousel slide events
+            const carousel = document.querySelector('#carouselExample');
+            carousel.addEventListener('slid.bs.carousel', function(event) {
+                const activeIndex = event.to;
+                currentImageIndex = activeIndex;
+                updateImageMetadata(activeIndex);
+                updateThumbnailSelection(activeIndex);
+            });
+
+            showCarousel();
+        }
+
+        function updateImageMetadata(index) {
+            const image = evidenceImages[index];
+            const currentImageIndexEl = document.getElementById('currentImageIndex');
+            const imageMetadataEl = document.getElementById('imageMetadata');
+
+            currentImageIndexEl.textContent = index + 1;
+
+            if (image) {
+                imageMetadataEl.innerHTML = `
+                    <strong>Severity:</strong> ${image.severity !== null ? image.severity.toFixed(1) : 'N/A'} | 
+                    <strong>Location:</strong> ${image.latitude.toFixed(6)}, ${image.longitude.toFixed(6)}
+                `;
+            }
+        }
+
+        function updateThumbnailSelection(index) {
+            document.querySelectorAll('.thumbnail-item').forEach((thumb, i) => {
+                if (i === index) {
+                    thumb.style.borderColor = '#dc3545';
+                    thumb.style.borderWidth = '3px';
+                } else {
+                    thumb.style.borderColor = '#ddd';
+                    thumb.style.borderWidth = '2px';
+                }
+            });
+        }
+
+        function goToImage(index) {
+            const carousel = bootstrap.Carousel.getInstance(document.querySelector('#carouselExample'));
+            if (carousel) {
+                carousel.to(index);
+            }
+        }
+
+        function convertFileUrlToWebPath(fileUrl) {
+            // Convert file:// URLs to web-accessible paths
+            if (fileUrl.startsWith('file:///')) {
+                // For local file paths, we might need to serve them through a file handler
+                // For now, return as-is or convert to a relative path
+                return fileUrl.replace('file:///', '/api/files/');
+            }
+            return fileUrl;
+        }
+
+        function showLoading() {
+            document.getElementById('loadingIndicator').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingIndicator').style.display = 'none';
+        }
+
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('errorMessage').style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        function showNoImages() {
+            document.getElementById('noImagesMessage').style.display = 'block';
+        }
+
+        function hideNoImages() {
+            document.getElementById('noImagesMessage').style.display = 'none';
+        }
+
+        function showCarousel() {
+            document.getElementById('imageCarouselContainer').style.display = 'block';
+        }
+
+        function hideCarousel() {
+            document.getElementById('imageCarouselContainer').style.display = 'none';
+        }
+
+        function closeViewer() {
+            window.close();
+        }
+    </script>
+}
+

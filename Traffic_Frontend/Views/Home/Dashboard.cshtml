@@ -1,0 +1,71 @@
+@{
+    ViewData["Title"] = "Traffic Dashboard";
+}
+
+<div class="container-fluid p-3">
+    <!-- Top Row: 3-Column Metrics -->
+    <div class="row mb-3">
+        <!-- Active Projects -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-3">Active Projects</h5>
+                    <h2 class="mb-0" id="activeProjects">0</h2>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Critical Alerts (Red counter) -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100 border-danger">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-3">Critical Alerts</h5>
+                    <h2 class="mb-0 text-danger" id="criticalAlerts">0</h2>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CO2 Saved (Green text) -->
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted mb-3">CO2 Saved</h5>
+                    <h2 class="mb-0 text-success" id="co2Saved">0 kg</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Area: Full-width Mapbox Map -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body p-0">
+                    <div id="dashboardMap" style="width: 100%; height: 70vh;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <!-- Mapbox GL JS -->
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css' rel='stylesheet' />
+    
+    <!-- SignalR -->
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8.0.0/dist/browser/signalr.min.js"></script>
+    
+    <!-- Traffic Line Renderer -->
+    <script src="~/js/trafficLineRenderer.js"></script>
+    
+    <script>
+        // Pass Mapbox token from server-side to client
+        window.MAPBOX_ACCESS_TOKEN = '@ViewBag.MapboxAccessToken';
+        // Pass backend API URL
+        window.BACKEND_API_URL = '@(ViewBag.BackendApiUrl ?? "http://localhost:8000")';
+    </script>
+    
+    <script src="~/js/dashboard.js"></script>
+}
+

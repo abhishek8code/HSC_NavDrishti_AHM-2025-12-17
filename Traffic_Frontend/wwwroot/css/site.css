@@ -1,0 +1,44 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+#map {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+}
+
+/* Pulsing animation for unstable flow (yellow lines) */
+@keyframes pulse-yellow {
+    0% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.6;
+    }
+}
+
+/* Pulsing animation for line width */
+@keyframes pulse-width {
+    0% {
+        stroke-width: 4;
+    }
+    50% {
+        stroke-width: 6;
+    }
+    100% {
+        stroke-width: 4;
+    }
+}
+
+/* Class for pulsing yellow traffic lines */
+.traffic-line-unstable {
+    animation: pulse-yellow 2s ease-in-out infinite;
+}
+
