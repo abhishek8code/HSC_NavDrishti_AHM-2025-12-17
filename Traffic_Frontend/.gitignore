@@ -43,3 +43,16 @@ wwwroot/js/**/*.js.map
 .env
 .env.local
 
+# Allow tracking of developer JS modules (whitelist specific source files)
+# These are suppressed by the general `wwwroot/js/**/*.js` ignore rule above,
+# so explicitly un-ignore the source modules we maintain in-source.
+!wwwroot/js/apiClient.js
+!wwwroot/js/dashboard.js
+!wwwroot/js/mapInitializer.js
+!wwwroot/js/routeAnalysis.js
+!wwwroot/js/routeSelection.js
+!wwwroot/js/scenarioCompare.js
+!wwwroot/js/trafficLineExample.js
+!wwwroot/js/trafficLineRenderer.js
+!wwwroot/js/trafficOverlay.js
+
