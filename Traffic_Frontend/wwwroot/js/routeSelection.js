@@ -10,6 +10,8 @@
     let draw = null;
     let selectedRoute = null;
     let routeCoordinates = [];
+    let clickSelectMode = false;
+    let clickMarkers = [];
     
     // Initialize: prefer reusing the dashboard map. Wait for 'dashboardMapReady' or poll for it.
     (function waitForMap() {
@@ -148,6 +150,16 @@
             map.__routeSelectionHandlersAttached = true;
         }
 
+        // Handle map clicks when in click-select mode
+        if (!map.__routeSelectionClickHandler) {
+            map.on('click', function(e) {
+                if (clickSelectMode) {
+                    handleMapClickForClickSelect(e);
+                }
+            });
+            map.__routeSelectionClickHandler = true;
+        }
+
         // ensure globals are set
         window.dashboardMap = map;
         window.mapboxDraw = draw;
@@ -159,9 +171,14 @@
         const startDrawingBtn = document.getElementById('startDrawingBtn');
         const clearRouteBtn = document.getElementById('clearRouteBtn');
         const createProjectBtn = document.getElementById('createProjectFromRoute');
+        const clickSelectBtn = document.getElementById('clickSelectBtn');
 
         if (startDrawingBtn) {
             startDrawingBtn.addEventListener('click', startDrawing);
+        }
+
+        if (clickSelectBtn) {
+            clickSelectBtn.addEventListener('click', startClickSelect);
         }
 
         if (clearRouteBtn) {
@@ -178,6 +195,8 @@
 
         // Clear any existing routes
         draw.deleteAll();
+        removeClickMarkers();
+        clickSelectMode = false;
         
         // Enable line drawing mode
         draw.changeMode('draw_line_string');
@@ -221,6 +240,8 @@
             draw.deleteAll();
         }
         clearRouteInfo();
+        removeClickMarkers();
+        clickSelectMode = false;
         
         document.getElementById('selectionHint').textContent = 
             'Click "Draw Route" then click points on the map to create a construction route.';
@@ -453,6 +474,86 @@
         } catch (error) {
             console.error('Error creating project:', error);
             alert('Error creating project. Please ensure backend is running.');
+        }
+    }
+
+    // --- Click-select helpers ---
+    function startClickSelect() {
+        if (!map) {
+            console.warn('Map not initialized for click-select');
+            return;
+        }
+
+        // Clear any previous selection
+        draw.deleteAll();
+        removeClickMarkers();
+        routeCoordinates = [];
+        selectedRoute = null;
+
+        clickSelectMode = true;
+        document.getElementById('selectionHint').textContent = 'Click the map to select START point, then click to select END point.';
+        console.log('Click-select mode activated');
+    }
+
+    function handleMapClickForClickSelect(e) {
+        try {
+            const lngLat = [e.lngLat.lng, e.lngLat.lat];
+
+            // Add a marker for this click
+            const marker = new mapboxgl.Marker({ color: '#ff7f0e' })
+                .setLngLat(lngLat)
+                .addTo(map);
+            clickMarkers.push(marker);
+
+            routeCoordinates.push(lngLat);
+
+            if (routeCoordinates.length === 1) {
+                document.getElementById('selectionHint').textContent = 'Start point set. Click the map to set END point.';
+                return;
+            }
+
+            // On second click, create a straight line between points
+            if (routeCoordinates.length >= 2) {
+                // Create GeoJSON LineString feature
+                const feature = {
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: routeCoordinates
+                    },
+                    properties: {}
+                };
+
+                // Add to draw so it becomes the selected feature
+                try {
+                    draw.deleteAll();
+                    draw.add(feature);
+                } catch (err) {
+                    console.warn('Could not add feature to draw:', err);
+                }
+
+                // Store selection and analyze
+                selectedRoute = feature;
+                analyzeRoute();
+
+                document.getElementById('clearRouteBtn').disabled = false;
+                document.getElementById('selectionHint').textContent = 'Route selected. View details below or create a project.';
+
+                // Exit click-select mode
+                clickSelectMode = false;
+                console.log('Click-select mode finished');
+            }
+        } catch (err) {
+            console.error('Error handling map click for click-select:', err);
+        }
+    }
+
+    function removeClickMarkers() {
+        if (clickMarkers && clickMarkers.length) {
+            clickMarkers.forEach(m => {
+                try { m.remove(); } catch (e) {}
+            });
+            clickMarkers = [];
         }
     }
 
