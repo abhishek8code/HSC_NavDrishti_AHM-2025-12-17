@@ -301,6 +301,9 @@
 
         // Optionally call backend for detailed analysis
         await fetchBackendRouteAnalysis(routeCoordinates);
+
+        // Fetch and render alternative routes
+        await fetchAndRenderAlternatives(routeCoordinates);
     }
 
     function estimateRoadProperties(coordinates, lengthKm) {
@@ -682,8 +685,18 @@
             }
         });
 
-        // Populate Alternatives panel via event (scenarioCompare will render)
-        dispatchAlternativesEvent(routes.map((r, i) => ({ routeId: r.id || `mock-${i+1}`, lengthKm: r.distance_km || (turf.length(turf.lineString(r.coordinates), {units: 'kilometers'})), numSegments: (r.coordinates||[]).length, suitabilityScore: r.traffic_score || 0.5, rank: r.rank || (i+1), raw: r })));
+        // Populate Alternatives panel via event - pass routes with both formats for compatibility
+        dispatchAlternativesEvent(routes.map((r, i) => ({ 
+            id: r.id || `mock-${i+1}`,
+            routeId: r.id || `mock-${i+1}`, 
+            name: r.name || `Alt ${i+1}`,
+            distance_km: r.distance_km || (turf.length(turf.lineString(r.coordinates), {units: 'kilometers'})),
+            lengthKm: r.distance_km || (turf.length(turf.lineString(r.coordinates), {units: 'kilometers'})), 
+            numSegments: (r.coordinates||[]).length, 
+            suitabilityScore: r.traffic_score || 0.5, 
+            rank: r.rank || (i+1), 
+            raw: r 
+        })));
     }
 
     function highlightAlternative(route, rid) {
