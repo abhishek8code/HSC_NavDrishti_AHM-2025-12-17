@@ -711,28 +711,66 @@
 
     function dispatchAlternativesEvent(routes) {
         const detail = { allAlternatives: routes, recommendedAlternativeId: routes.length ? routes[0].routeId || routes[0].id : null };
-        try { document.dispatchEvent(new CustomEvent('routes:alternatives', { detail: detail })); } catch(e){}
+        try {
+            // Store latest alternatives for use by UI handlers
+            window.latestAlternatives = routes;
+            document.dispatchEvent(new CustomEvent('routes:alternatives', { detail: detail }));
+        } catch(e){}
     }
 
-    // Listen for clicks inside Alternatives panel (select button)
+    // Listen for clicks inside Alternatives panel (Select / Details buttons)
     document.addEventListener('click', function(e) {
-        const btn = e.target.closest && e.target.closest('[data-route]');
-        if (btn && btn.dataset && btn.dataset.route) {
-            const rid = btn.dataset.route;
-            // Find matching route source id and simulate highlight
-            const matching = alternativeRouteIds.find(id => id.endsWith(rid) || id.includes(rid));
+        const el = e.target.closest && e.target.closest('[data-route]');
+        if (!el || !el.dataset || !el.dataset.route) return;
+
+        const ridKey = el.dataset.route;
+        const action = el.dataset.action || 'select';
+
+        // Find matching route source id
+        const matching = alternativeRouteIds.find(id => id.endsWith(ridKey) || id.includes(ridKey));
+
+        if (action === 'select') {
             if (matching) {
-                // read route data from source
                 try {
                     const src = map.getSource(matching);
                     if (src) {
-                        const data = src._data || src._geojson || null;
+                        const data = src._data || src._geojson || src._data || null;
                         if (data) {
-                            highlightAlternative({ coordinates: data.geometry.coordinates }, matching);
+                            highlightAlternative({ coordinates: data.geometry.coordinates, raw: data.properties || null }, matching);
+                            return;
                         }
                     }
-                } catch(e){ console.warn(e); }
+                } catch (e) { console.warn(e); }
             }
+
+            // As a fallback, try to find the route in latestAlternatives store
+            try {
+                if (window.latestAlternatives && Array.isArray(window.latestAlternatives)) {
+                    const found = window.latestAlternatives.find(a => (a.id && String(a.id) === String(ridKey)) || (a.routeId && String(a.routeId) === String(ridKey)) || (String(a.rank) === String(ridKey)));
+                    if (found) {
+                        highlightAlternative(found.raw || found, `alt-route-${found.id || found.routeId || found.rank}`);
+                    }
+                }
+            } catch (err) { console.warn('Select fallback failed', err); }
+        } else if (action === 'details') {
+            // Emit a show details event with the raw alternative data (partial will listen and open modal)
+            try {
+                let payload = null;
+                if (matching) {
+                    const src = map.getSource(matching);
+                    if (src) {
+                        const data = src._data || src._geojson || null;
+                        if (data) payload = { id: ridKey, raw: { coordinates: data.geometry.coordinates, properties: data.properties } };
+                    }
+                }
+
+                if (!payload && window.latestAlternatives) {
+                    const found = window.latestAlternatives.find(a => (a.id && String(a.id) === String(ridKey)) || (a.routeId && String(a.routeId) === String(ridKey)) || (String(a.rank) === String(ridKey)));
+                    if (found) payload = { id: ridKey, raw: found.raw || found };
+                }
+
+                document.dispatchEvent(new CustomEvent('routes:showAlternativeDetails', { detail: payload }));
+            } catch (err) { console.warn('Could not dispatch details event', err); }
         }
     });
 
@@ -740,7 +778,33 @@
     window.RouteSelection = {
         getSelectedRoute: () => selectedRoute,
         getRouteCoordinates: () => routeCoordinates,
-        clearRoute: clearRoute
+        clearRoute: clearRoute,
+        // Expose a helper to highlight an alternative by matching route id/key
+        highlightAlternativeById: function(routeKey) {
+            try {
+                const matching = alternativeRouteIds.find(id => id.endsWith(routeKey) || id.includes(routeKey));
+                if (matching && map) {
+                    const src = map.getSource(matching);
+                    if (src) {
+                        const data = src._data || src._geojson || null;
+                        if (data) {
+                            highlightAlternative({ coordinates: data.geometry.coordinates, raw: data.properties }, matching);
+                            return true;
+                        }
+                    }
+                }
+
+                // fallback to latestAlternatives
+                if (window.latestAlternatives && Array.isArray(window.latestAlternatives)) {
+                    const found = window.latestAlternatives.find(a => (a.id && String(a.id) === String(routeKey)) || (a.routeId && String(a.routeId) === String(routeKey)) || (String(a.rank) === String(routeKey)));
+                    if (found) {
+                        highlightAlternative(found.raw || found, `alt-route-${found.id || found.routeId || found.rank}`);
+                        return true;
+                    }
+                }
+            } catch (err) { console.warn('highlightAlternativeById error', err); }
+            return false;
+        }
     };
 
 })();

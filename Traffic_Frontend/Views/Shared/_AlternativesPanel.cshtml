@@ -22,15 +22,17 @@
             alts.forEach(a => {
                 const card = document.createElement('div');
                 card.className = 'card alternative-card';
+                const displayName = a.name || ('Alt ' + (a.rank || a.routeId || ''));
+                const distance = (a.distance_km || a.lengthKm || 0);
                 card.innerHTML = `
                     <div class="card-body p-2 d-flex justify-content-between align-items-center">
                         <div>
-                            <div class="fw-bold small mb-1">${a.name || ('Alt ' + (a.rank || a.routeId || ''))}</div>
-                            <div class="small text-muted">${(a.distance_km || a.lengthKm || 0).toFixed ? ( (a.distance_km||a.lengthKm).toFixed(2) + ' km') : ''} • Rank ${a.rank || a.routeId}</div>
+                            <div class="fw-bold small mb-1">${displayName}</div>
+                            <div class="small text-muted">${distance.toFixed ? (distance.toFixed(2) + ' km') : ''} • Rank ${a.rank || a.routeId}</div>
                         </div>
                         <div class="text-end">
-                            <button class="btn btn-sm btn-outline-primary me-1" data-route="${a.id || a.routeId || a.rank || ''}">Select</button>
-                            <button class="btn btn-sm btn-light btn-sm details-btn" data-route="${a.id || a.routeId || a.rank || ''}">Details</button>
+                            <button class="btn btn-sm btn-outline-primary me-1" data-route="${a.id || a.routeId || a.rank || ''}" data-action="select">Select</button>
+                            <button class="btn btn-sm btn-light btn-sm details-btn" data-route="${a.id || a.routeId || a.rank || ''}" data-action="details">Details</button>
                         </div>
                     </div>
                 `;
@@ -38,5 +40,69 @@
                 container.appendChild(card);
             });
         } catch (err) { console.warn('Could not render alternatives panel', err); }
+    });
+
+    // Modal for alternative details
+    const altModalHtml = `
+    <div class="modal fade" id="altDetailsModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="altDetailsTitle">Alternative Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body small">
+            <div><strong>Distance:</strong> <span id="altDetailsDistance">-</span></div>
+            <div><strong>Travel Time:</strong> <span id="altDetailsTravelTime">-</span></div>
+            <div><strong>Traffic Score:</strong> <span id="altDetailsTraffic">-</span></div>
+            <div><strong>Emissions (g):</strong> <span id="altDetailsEmissions">-</span></div>
+            <div class="mt-2 text-muted small" id="altDetailsExtra"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    `;
+
+    // Append modal to container once
+    try {
+        if (!document.getElementById('altDetailsModal')) {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = altModalHtml;
+            document.body.appendChild(wrapper.firstElementChild);
+        }
+    } catch (err) { console.warn('Could not append alt details modal', err); }
+
+    // Listen for details events dispatched by routeSelection.js
+    document.addEventListener('routes:showAlternativeDetails', function(e) {
+        try {
+            const payload = e.detail || null;
+            if (!payload || !payload.raw) {
+                // show empty modal
+                const modalEl = document.getElementById('altDetailsModal');
+                if (modalEl) new bootstrap.Modal(modalEl).show();
+                return;
+            }
+
+            const raw = payload.raw || {};
+            const props = raw.properties || raw;
+
+            const distance = props.distance_km || props.lengthKm || (raw.distance_km || raw.lengthKm) || '-';
+            const travel = props.travel_time_min || props.travel_time || '-';
+            const traffic = (props.traffic_score !== undefined) ? props.traffic_score : (raw.traffic_score !== undefined ? raw.traffic_score : '-');
+            const emission = props.emission_g || raw.emission_g || '-';
+
+            document.getElementById('altDetailsTitle').textContent = props.name || ('Alternative ' + (payload.id || ''));
+            document.getElementById('altDetailsDistance').textContent = (typeof distance === 'number') ? distance.toFixed(2) + ' km' : distance;
+            document.getElementById('altDetailsTravelTime').textContent = (travel && typeof travel === 'number') ? travel + ' min' : travel;
+            document.getElementById('altDetailsTraffic').textContent = (typeof traffic === 'number') ? (traffic.toFixed ? traffic.toFixed(2) : String(traffic)) : traffic;
+            document.getElementById('altDetailsEmissions').textContent = emission;
+            document.getElementById('altDetailsExtra').textContent = props.summary || props.description || '';
+
+            const modalEl = document.getElementById('altDetailsModal');
+            if (modalEl) new bootstrap.Modal(modalEl).show();
+        } catch (err) { console.warn('Could not populate/show alt details modal', err); }
     });
 </script>
