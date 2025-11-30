@@ -586,7 +586,9 @@
     let alternativeRouteIds = [];
 
     async function fetchAndRenderAlternatives(coordinates) {
+        console.log('[RouteSelection] fetchAndRenderAlternatives called with coordinates:', coordinates);
         const backendUrl = window.BACKEND_API_URL || 'http://localhost:8001';
+        console.log('[RouteSelection] Backend URL:', backendUrl);
         const payload = {
             start_lat: coordinates[0][1],
             start_lon: coordinates[0][0],
@@ -604,7 +606,9 @@
 
             if (res.ok) {
                 const data = await res.json();
+                console.log('[RouteSelection] Backend response:', data);
                 if (data && data.routes) {
+                    console.log('[RouteSelection] Rendering', data.routes.length, 'alternatives from backend');
                     renderAlternativesOnMap(data.routes);
                     dispatchAlternativesEvent(data.routes);
                     return;
@@ -615,7 +619,9 @@
         }
 
         // Fallback: generate mock alternatives by perturbing coordinates
+        console.log('[RouteSelection] Using mock alternatives fallback');
         const mock = generateMockAlternatives(coordinates);
+        console.log('[RouteSelection] Generated', mock.length, 'mock alternatives');
         renderAlternativesOnMap(mock);
         dispatchAlternativesEvent(mock);
     }
@@ -723,12 +729,17 @@
     }
 
     function dispatchAlternativesEvent(routes) {
+        console.log('[RouteSelection] dispatchAlternativesEvent called with', routes.length, 'routes');
         const detail = { allAlternatives: routes, recommendedAlternativeId: routes.length ? routes[0].routeId || routes[0].id : null };
+        console.log('[RouteSelection] Event detail:', detail);
         try {
             // Store latest alternatives for use by UI handlers
             window.latestAlternatives = routes;
             document.dispatchEvent(new CustomEvent('routes:alternatives', { detail: detail }));
-        } catch(e){}
+            console.log('[RouteSelection] routes:alternatives event dispatched successfully');
+        } catch(e){
+            console.error('[RouteSelection] Error dispatching alternatives event:', e);
+        }
     }
 
     // Listen for clicks inside Alternatives panel (Select / Details buttons)

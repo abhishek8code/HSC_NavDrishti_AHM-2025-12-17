@@ -6,16 +6,21 @@
 </div>
 
 <script>
+    console.log('[AlternativesPanel] Script loaded and listener attached');
+    
     // Listen for alternatives event and render summarized cards
     document.addEventListener('routes:alternatives', function(e) {
+        console.log('[AlternativesPanel] routes:alternatives event received!', e.detail);
         try {
             const container = document.getElementById('alternativesList');
             const detail = e.detail || {};
             const alts = detail.allAlternatives || [];
+            console.log('[AlternativesPanel] Alternatives count:', alts.length);
             container.innerHTML = '';
 
             if (!alts.length) {
                 container.innerHTML = '<div class="text-muted">No alternatives found.</div>';
+                console.warn('[AlternativesPanel] No alternatives to render');
                 return;
             }
 

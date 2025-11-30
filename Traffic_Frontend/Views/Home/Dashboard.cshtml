@@ -146,7 +146,7 @@
     <!-- Pass tokens & backend URL early -->
     <script>
         window.MAPBOX_ACCESS_TOKEN = '@ViewBag.MapboxAccessToken';
-        window.BACKEND_API_URL = '@(ViewBag.BackendApiUrl ?? "http://localhost:8001")';
+        window.BACKEND_API_URL = '@(ViewBag.BackendApiUrl ?? "http://localhost:8002")';
         // Disable traffic polling by default to avoid backend 404 spam; set to true to enable
         window.ENABLE_TRAFFIC_POLL = false;
         // Enable dev persistence of projects (set to true for local testing)

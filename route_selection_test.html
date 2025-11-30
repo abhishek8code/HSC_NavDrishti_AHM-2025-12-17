@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Selection Test - NavDrishti</title>
+    
+    <!-- Mapbox GL JS -->
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css' rel='stylesheet' />
+    
+    <!-- Mapbox GL Draw -->
+    <script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js'></script>
+    <link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css' type='text/css' />
+    
+    <!-- Turf.js -->
+    <script src='https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js'></script>
+    
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        #map { height: 60vh; }
+        .info-panel { max-height: 60vh; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid p-3">
+        <h2 class="mb-3">🗺️ Interactive Route Selection - NavDrishti</h2>
+        
+        <div class="row">
+            <!-- Control Panel -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Route Selection</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2 mb-3">
+                            <button id="startDrawingBtn" class="btn btn-success">
+                                <i class="bi bi-pencil"></i> Draw Route on Map
+                            </button>
+                            <button id="clearRouteBtn" class="btn btn-outline-danger" disabled>
+                                <i class="bi bi-trash"></i> Clear Route
+                            </button>
+                        </div>
+                        
+                        <!-- Route Info Display -->
+                        <div id="routeInfoPanel" class="border rounded p-3 bg-light d-none">
+                            <h6 class="fw-bold mb-2">📏 Route Information</h6>
+                            <div class="mb-2">
+                                <strong>Length:</strong> <span id="routeLength">-</span> km
+                            </div>
+                            <div class="mb-2">
+                                <strong>Points:</strong> <span id="routePoints">-</span>
+                            </div>
+                            <div class="mb-2">
+                                <strong>Road Type:</strong> <span id="roadType">-</span>
+                            </div>
+                            <div class="mb-2">
+                                <strong>Road Width:</strong> <span id="roadWidth">-</span> m
+                            </div>
+                            <div class="mb-2">
+                                <strong>Lanes:</strong> <span id="roadLanes">-</span>
+                            </div>
+                            <hr>
+                            <h6 class="fw-bold mb-2">🚗 Traffic Analysis</h6>
+                            <div class="mb-2">
+                                <strong>Total Vehicles:</strong> <span id="vehicleCount">-</span>
+                            </div>
+                            <div class="small">
+                                <div><strong>🏍️ Two Wheeler:</strong> <span id="twoWheelerCount">-</span></div>
+                                <div><strong>🚗 Four Wheeler:</strong> <span id="fourWheelerCount">-</span></div>
+                                <div><strong>🚛 Heavy (Bus/Truck):</strong> <span id="heavyVehicleCount">-</span></div>
+                            </div>
+                        </div>
+                        
+                        <div id="selectionHint" class="text-muted small mt-2">
+                            Click "Draw Route" then click points on the map to create a construction route.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Map -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body p-0">
+                        <div id="map"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // REPLACE WITH YOUR MAPBOX TOKEN
+        mapboxgl.accessToken = 'pk.eyJ1IjoiYWJoaThjb2RlIiwiYSI6ImNtaWlxb3p1YTB4YXAzZHNmbnV6MGEzNWsifQ.DlHCBHGpIsF7t1iACwEmkQ';
+        
+        let map, draw, selectedRoute = null, routeCoordinates = [];
+
+        // Initialize map
+        map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [72.5714, 23.0225], // Ahmedabad
+            zoom: 12
+        });
+
+        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+        // Initialize Mapbox Draw
+        draw = new MapboxDraw({
+            displayControlsDefault: false,
+            controls: {
+                line_string: false,
+                polygon: false,
+                point: false,
+                trash: false
+            },
+            styles: [
+                {
+                    'id': 'gl-draw-line',
+                    'type': 'line',
+                    'filter': ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
+                    'layout': { 'line-cap': 'round', 'line-join': 'round' },
+                    'paint': { 'line-color': '#3b82f6', 'line-width': 4, 'line-opacity': 0.8 }
+                },
+                {
+                    'id': 'gl-draw-point',
+                    'type': 'circle',
+                    'filter': ['all', ['==', '$type', 'Point'], ['==', 'meta', 'vertex']],
+                    'paint': { 'circle-radius': 6, 'circle-color': '#3b82f6', 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' }
+                }
+            ]
+        });
+
+        map.addControl(draw, 'top-left');
+
+        map.on('draw.create', handleRouteDrawn);
+        map.on('draw.update', handleRouteDrawn);
+        map.on('draw.delete', () => clearRouteInfo());
+
+        // Event listeners
+        document.getElementById('startDrawingBtn').addEventListener('click', () => {
+            draw.deleteAll();
+            draw.changeMode('draw_line_string');
+            document.getElementById('selectionHint').textContent = 
+                'Click on the map to add points. Double-click or press Enter to finish.';
+        });
+
+        document.getElementById('clearRouteBtn').addEventListener('click', () => {
+            draw.deleteAll();
+            clearRouteInfo();
+        });
+
+        function handleRouteDrawn(e) {
+            const data = draw.getAll();
+            if (data.features.length === 0) return;
+
+            selectedRoute = data.features[0];
+            routeCoordinates = selectedRoute.geometry.coordinates;
+
+            analyzeRoute();
+            document.getElementById('clearRouteBtn').disabled = false;
+            document.getElementById('selectionHint').textContent = 
+                'Route selected. View details below.';
+        }
+
+        function analyzeRoute() {
+            if (routeCoordinates.length < 2) return;
+
+            const line = turf.lineString(routeCoordinates);
+            const lengthKm = turf.length(line, {units: 'kilometers'});
+
+            // Display route info
+            document.getElementById('routeLength').textContent = lengthKm.toFixed(2);
+            document.getElementById('routePoints').textContent = routeCoordinates.length;
+
+            // Estimate properties based on length
+            let roadType, roadWidth, lanes;
+            if (lengthKm > 10) {
+                roadType = 'Highway'; roadWidth = 12; lanes = 4;
+            } else if (lengthKm > 5) {
+                roadType = 'Main Road'; roadWidth = 10; lanes = 4;
+            } else if (lengthKm > 1) {
+                roadType = 'Urban Road'; roadWidth = 7.5; lanes = 2;
+            } else {
+                roadType = 'Local Street'; roadWidth = 5; lanes = 1;
+            }
+
+            document.getElementById('roadType').textContent = roadType;
+            document.getElementById('roadWidth').textContent = roadWidth.toFixed(1);
+            document.getElementById('roadLanes').textContent = lanes;
+
+            // Estimate traffic
+            const baseVehiclesPerKm = 500;
+            const total = Math.round(baseVehiclesPerKm * lengthKm);
+            const twoWheeler = Math.round(total * 0.45);
+            const fourWheeler = Math.round(total * 0.40);
+            const heavy = Math.round(total * 0.15);
+
+            document.getElementById('vehicleCount').textContent = total.toLocaleString();
+            document.getElementById('twoWheelerCount').textContent = twoWheeler.toLocaleString();
+            document.getElementById('fourWheelerCount').textContent = fourWheeler.toLocaleString();
+            document.getElementById('heavyVehicleCount').textContent = heavy.toLocaleString();
+
+            document.getElementById('routeInfoPanel').classList.remove('d-none');
+        }
+
+        function clearRouteInfo() {
+            selectedRoute = null;
+            routeCoordinates = [];
+            document.getElementById('routeInfoPanel').classList.add('d-none');
+            document.getElementById('clearRouteBtn').disabled = true;
+            document.getElementById('selectionHint').textContent = 
+                'Click "Draw Route" then click points on the map to create a construction route.';
+        }
+    </script>
+</body>
+</html>

@@ -116,3 +116,27 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     db.delete(project)
     db.commit()
     return None
+
+
+@router.post("/dev-create", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
+def create_project_dev(payload: ProjectCreate, db: Session = Depends(get_db)):
+    """
+    Development helper to create a project without requiring admin auth.
+    Useful for local testing when auth is not configured.
+    """
+    project = models.Project(
+        name=payload.name,
+        status=payload.status.value if isinstance(payload.status, ProjectStatus) else payload.status,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+        start_lat=payload.start_lat,
+        start_lon=payload.start_lon,
+        end_lat=payload.end_lat,
+        end_lon=payload.end_lon,
+        resource_allocation=payload.resource_allocation,
+        emission_reduction_estimate=payload.emission_reduction_estimate
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project

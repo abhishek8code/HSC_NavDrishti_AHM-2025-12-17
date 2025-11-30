@@ -18,6 +18,61 @@ from pydantic import BaseModel
 
 app = FastAPI(title="Damaged Roads Service", version="1.0.0")
 
+# Diagnostic startup/shutdown handlers to capture environment and DB state
+import logging
+logger = logging.getLogger("traffic_backend_diagnostics")
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+if not logger.handlers:
+    logger.addHandler(ch)
+
+
+@app.on_event("startup")
+async def _diagnostic_startup():
+    try:
+        logger.info("Diagnostic startup: listing environment variables relevant to DB and server")
+        import os
+        logger.info(f"SQLALCHEMY_DATABASE_URL={os.getenv('SQLALCHEMY_DATABASE_URL')}")
+        logger.info(f"DATABASE_URL={os.getenv('DATABASE_URL')}")
+
+        # Try a quick DB connection test using db_config if available
+        try:
+            from . import db_config
+            logger.info("Attempting test DB connection via db_config.get_engine() if available")
+            eng = getattr(db_config, 'get_engine', None)
+            if callable(eng):
+                e = eng()
+                with e.connect() as conn:
+                    res = conn.execute('SELECT 1')
+                    logger.info('DB test query OK')
+            else:
+                # fallback: try SessionLocal
+                sess = getattr(db_config, 'SessionLocal', None)
+                if sess:
+                    s = sess()
+                    try:
+                        s.execute('SELECT 1')
+                        logger.info('DB session test OK')
+                    finally:
+                        s.close()
+        except Exception as db_err:
+            logger.warning(f'Could not run DB test: {db_err}')
+
+        logger.info('Diagnostic startup complete')
+    except Exception as e:
+        logger.exception('Exception during diagnostic startup:')
+
+
+@app.on_event("shutdown")
+async def _diagnostic_shutdown():
+    try:
+        logger.info('Application shutdown event fired')
+    except Exception:
+        pass
+
 # Global variables to store road network data
 road_network_gdf: Optional[gpd.GeoDataFrame] = None
 road_network_graph: Optional[nx.DiGraph] = None
