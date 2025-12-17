@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -94,4 +95,24 @@ class Vehicle(Base):
     heading = Column(Float, nullable=True)  # degrees
     last_update = Column(DateTime, nullable=True)
     registration_date = Column(DateTime, nullable=False)
+
+
+class ConstructionProject(Base):
+    __tablename__ = 'construction_projects'
+    id = Column(Integer, primary_key=True)
+    project_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(32), default='planned')  # 'planned', 'active', 'completed'
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    created_date = Column(DateTime, default=datetime.utcnow)
+    updated_date = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Store GeoJSON as JSON instead of PostGIS geometry
+    zone_geojson = Column(JSON, nullable=False)  # Polygon GeoJSON
+    impact_radius_geojson = Column(JSON, nullable=True)  # Isochrone FeatureCollection
+    analysis_center_lat = Column(Float, nullable=True)
+    analysis_center_lon = Column(Float, nullable=True)
+    estimated_impact_area_km2 = Column(Float, nullable=True)
+    affected_roads_count = Column(Integer, nullable=True)
+    impact_analysis_data = Column(JSON, nullable=True)  # Full isochrone data
 

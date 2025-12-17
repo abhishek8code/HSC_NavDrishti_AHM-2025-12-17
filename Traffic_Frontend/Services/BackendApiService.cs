@@ -287,7 +287,18 @@ namespace Traffic_Frontend.Services
     {
         public int Id { get; set; }
         public string? Name { get; set; }
+        public string? Description { get; set; }
         public string? Status { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public List<List<double>>? RouteCoordinates { get; set; }
+        public double? EmissionReductionEstimate { get; set; }
+        public string? StartTime { get; set; }
+        public string? EndTime { get; set; }
+        public double? StartLat { get; set; }
+        public double? StartLon { get; set; }
+        public double? EndLat { get; set; }
+        public double? EndLon { get; set; }
+        public string? ResourceAllocation { get; set; }
     }
 
     public class ProjectCreateDto

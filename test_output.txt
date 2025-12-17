@@ -1,0 +1,11 @@
+
+
+Traceback (most recent call last):
+  File "C:\Users\abhis\HSC_NavDrishti_AHM\test_diversion_analysis.py", line 276, in <module>
+    main()
+  File "C:\Users\abhis\HSC_NavDrishti_AHM\test_diversion_analysis.py", line 238, in main
+    print("\u2554" + "="*78 + "\u2557")
+  File "C:\Users\abhis\AppData\Local\Programs\Python\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2554' in position 0: character maps to <undefined>

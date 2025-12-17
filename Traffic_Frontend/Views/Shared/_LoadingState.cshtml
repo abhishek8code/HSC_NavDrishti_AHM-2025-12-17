@@ -1,0 +1,84 @@
+@{
+    var state = ViewData["State"]?.ToString() ?? "loading"; // loading, error, empty
+    var message = ViewData["Message"]?.ToString() ?? "";
+    var retryAction = ViewData["RetryAction"]?.ToString() ?? "";
+}
+
+@if (state == "loading")
+{
+    <div class="loading-state text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h5 class="text-muted">@(string.IsNullOrEmpty(message) ? "Loading..." : message)</h5>
+        <p class="text-muted small">Please wait</p>
+    </div>
+}
+else if (state == "error")
+{
+    <div class="error-state text-center py-5">
+        <div class="mb-3">
+            <i class="bi bi-exclamation-triangle text-danger" style="font-size: 4rem;"></i>
+        </div>
+        <h5 class="text-danger">@(string.IsNullOrEmpty(message) ? "Connection Error" : message)</h5>
+        <p class="text-muted">Unable to load data. Please check your connection.</p>
+        @if (!string.IsNullOrEmpty(retryAction))
+        {
+            <button type="button" class="btn btn-primary mt-3" onclick="@retryAction">
+                <i class="bi bi-arrow-clockwise"></i> Retry
+            </button>
+            <button type="button" class="btn btn-outline-secondary mt-3 ms-2" data-bs-toggle="collapse" data-bs-target="#errorDetails">
+                <i class="bi bi-info-circle"></i> Details
+            </button>
+            <div class="collapse mt-3" id="errorDetails">
+                <div class="alert alert-light text-start" style="max-width: 500px; margin: 0 auto;">
+                    <small class="text-muted font-monospace">@ViewData["ErrorDetails"]</small>
+                </div>
+            </div>
+        }
+    </div>
+}
+else if (state == "empty")
+{
+    <div class="empty-state text-center py-5">
+        <div class="mb-3">
+            <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
+        </div>
+        <h5 class="text-muted">@(string.IsNullOrEmpty(message) ? "No Data Yet" : message)</h5>
+        <p class="text-muted">Get started by creating your first project</p>
+        @if (!string.IsNullOrEmpty(retryAction))
+        {
+            <a href="@retryAction" class="btn btn-primary mt-3">
+                <i class="bi bi-plus-circle"></i> Get Started
+            </a>
+        }
+    </div>
+}
+
+<style>
+    .loading-state, .error-state, .empty-state {
+        min-height: 300px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .spinner-border {
+        animation-duration: 0.75s;
+    }
+
+    .error-state button {
+        min-width: 120px;
+    }
+
+    @@media (max-width: 576px) {
+        .loading-state, .error-state, .empty-state {
+            min-height: 200px;
+        }
+
+        .loading-state i, .error-state i, .empty-state i {
+            font-size: 3rem !important;
+        }
+    }
+</style>

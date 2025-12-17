@@ -1,0 +1,280 @@
+@{
+    ViewData["Title"] = "Construction Planning - NavDrishti";
+}
+
+@section Styles {
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.css' rel='stylesheet' />
+    <link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css' type='text/css' />
+    <style>
+        #constructionMap {
+            height: calc(100vh - 200px);
+            min-height: 600px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .control-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .layer-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 20px;
+        }
+        
+        .analysis-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .impact-results {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+        
+        .impact-results.show {
+            display: block;
+        }
+        
+        .isochrone-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: none;
+        }
+        
+        .alert-info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 20%);
+            color: white;
+            border: none;
+        }
+        
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .status-planned { background: #ffc107; color: #000; }
+        .status-active { background: #dc3545; color: #fff; }
+        .status-completed { background: #28a745; color: #fff; }
+    </style>
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-1">
+                <i class="bi bi-cone-striped"></i> Construction Planning & Impact Analysis
+            </h2>
+            <p class="text-muted">
+                Draw construction zones on the map to analyze traffic impact and calculate diversion routes.
+            </p>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="control-panel">
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                    <div class="mb-2 mb-md-0">
+                        <h5 class="mb-2">Map Controls</h5>
+                        <div class="layer-toggle">
+                            <input type="checkbox" id="toggleTraffic" class="form-check-input">
+                            <label for="toggleTraffic" class="form-check-label">
+                                <i class="bi bi-car-front-fill"></i> Live Traffic
+                            </label>
+                        </div>
+                        <div class="layer-toggle">
+                            <input type="checkbox" id="toggleSatellite" class="form-check-input">
+                            <label for="toggleSatellite" class="form-check-label">
+                                <i class="bi bi-globe"></i> Satellite View
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <button id="btnDrawZone" class="btn btn-primary me-2">
+                            <i class="bi bi-pencil-square"></i> Draw Construction Zone
+                        </button>
+                        <button id="btnClearAll" class="btn btn-outline-danger">
+                            <i class="bi bi-trash"></i> Clear All
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mt-3 mb-0" role="alert">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <strong>Instructions:</strong> Click "Draw Construction Zone" to activate drawing mode. 
+                    Click on the map to create polygon vertices. Double-click or press Enter to complete the polygon.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="position-relative">
+                <div id="constructionMap"></div>
+                
+                <!-- Isochrone Legend -->
+                <div class="isochrone-legend" id="isochroneLegend" style="display: none;">
+                    <h6 class="mb-3">Impact Zones (Drive Time)</h6>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(255, 0, 0, 0.5);"></div>
+                        <span>5 minutes</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(255, 165, 0, 0.4);"></div>
+                        <span>10 minutes</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(255, 255, 0, 0.3);"></div>
+                        <span>15 minutes</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(144, 238, 144, 0.2);"></div>
+                        <span>20 minutes</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis Form -->
+    <div class="row" id="analysisFormContainer" style="display: none;">
+        <div class="col-lg-8">
+            <div class="analysis-form">
+                <h5 class="mb-3">
+                    <i class="bi bi-clipboard-data"></i> Construction Project Details
+                </h5>
+                <form id="constructionForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="projectName" class="form-label">Project Name *</label>
+                            <input type="text" class="form-control" id="projectName" 
+                                   placeholder="e.g., SG Highway Bridge Repair" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="projectStatus" class="form-label">Status</label>
+                            <select class="form-select" id="projectStatus">
+                                <option value="planned" selected>Planned</option>
+                                <option value="active">Active</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="startDate" class="form-label">Start Date *</label>
+                            <input type="date" class="form-control" id="startDate" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="endDate" class="form-label">End Date *</label>
+                            <input type="date" class="form-control" id="endDate" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="projectDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="projectDescription" rows="3"
+                                  placeholder="Describe the construction work and expected impact..."></textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <button type="button" class="btn btn-secondary" id="btnCancelAnalysis">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-graph-up-arrow"></i> Analyze Impact
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="bi bi-lightbulb"></i> Analysis Features
+                    </h6>
+                    <ul class="small text-muted mb-0">
+                        <li>Isochrone impact visualization (5-20 min drive times)</li>
+                        <li>Affected area calculation</li>
+                        <li>Alternative route suggestions</li>
+                        <li>Traffic diversion planning</li>
+                        <li>Spatial database storage</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Impact Results -->
+    <div class="row">
+        <div class="col-12">
+            <div class="impact-results" id="impactResults">
+                <h5 class="mb-3">
+                    <i class="bi bi-check-circle-fill text-success"></i> Impact Analysis Complete
+                </h5>
+                <div id="resultsContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.0/mapbox-gl.js'></script>
+    <script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js'></script>
+    <script src="~/js/construction/map_logic.js" asp-append-version="true"></script>
+    <script>
+        // Initialize construction planning module
+        window.ConstructionPlanning.init({
+            mapboxToken: '@ViewBag.MapboxToken',
+            backendUrl: 'http://localhost:8002'
+        });
+    </script>
+}

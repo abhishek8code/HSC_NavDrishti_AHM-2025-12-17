@@ -87,31 +87,194 @@ def traffic_live_all(db: Session = Depends(get_db)):
     Returns live traffic data for all segments with congestion levels.
     Generates mock data for Ahmedabad area if no real data exists.
     """
-    # Try to get real data from database
-    entries = db.query(models.TrafficDynamics).order_by(models.TrafficDynamics.timestamp.desc()).limit(100).all()
+    import json
+    import logging
+    from sqlalchemy import func
     
-    if entries:
+    # Log to file for debugging
+    logger = logging.getLogger("traffic_live")
+    with open("traffic_endpoint_debug.log", "a") as f:
+        f.write(f"\n=== /live endpoint called at {datetime.now()} ===\n")
+        f.write(f"DB Engine URL: {db.bind.url}\n")
+        f.write(f"models.TrafficDynamics: {models.TrafficDynamics}\n")
+        f.write(f"models.TrafficDynamics.__tablename__: {models.TrafficDynamics.__tablename__}\n")
+    
+    try:
+        # First check if we have any traffic data at all
+        traffic_count = db.query(models.TrafficDynamics).count()
+        logger.info(f"DEBUG: Total TrafficDynamics records in DB: {traffic_count}")
+        with open("traffic_endpoint_debug.log", "a") as f:
+            f.write(f"Traffic count: {traffic_count}\n")
+            f.write(f"Query result type: {type(traffic_count)}\n")
+        
+        if traffic_count == 0:
+            logger.info("DEBUG: No traffic data, using mock")
+            with open("traffic_endpoint_debug.log", "a") as f:
+                f.write(f"No traffic data, returning mock\n")
+            mock_segments = _generate_mock_traffic_segments()
+            return {"segments": mock_segments, "timestamp": datetime.now().isoformat(), "mock": True}
+        
+        # Get latest traffic data for each road segment
+        with open("traffic_endpoint_debug.log", "a") as f:
+            f.write(f"Executing subquery...\n")
+        
+        subquery = db.query(
+            models.TrafficDynamics.road_segment_id,
+            func.max(models.TrafficDynamics.timestamp).label('max_timestamp')
+        ).group_by(models.TrafficDynamics.road_segment_id).subquery()
+        
+        entries = db.query(models.TrafficDynamics).join(
+            subquery,
+            (models.TrafficDynamics.road_segment_id == subquery.c.road_segment_id) &
+            (models.TrafficDynamics.timestamp == subquery.c.max_timestamp)
+        ).all()
+        
+        logger.info(f"DEBUG: Retrieved {len(entries)} latest traffic entries")
+        with open("traffic_endpoint_debug.log", "a") as f:
+            f.write(f"Retrieved {len(entries)} entries\n")
+        
+        if not entries:
+            logger.info("DEBUG: Query returned 0 entries, using mock")
+            with open("traffic_endpoint_debug.log", "a") as f:
+                f.write(f"Entries is empty, returning mock\n")
+            mock_segments = _generate_mock_traffic_segments()
+            return {"segments": mock_segments, "timestamp": datetime.now().isoformat(), "mock": True}
+        
+        # Return real data if available
+        with open("traffic_endpoint_debug.log", "a") as f:
+            f.write(f"Processing {len(entries)} entries\n")
+        
+        segments = []
+        for entry in entries:
+            try:
+                segment = db.query(models.RoadNetwork).filter(models.RoadNetwork.id == entry.road_segment_id).first()
+                if segment and segment.geometry:
+                    # Parse geometry JSON
+                    geom = json.loads(segment.geometry)
+                    coordinates = geom.get("coordinates", [])
+                    
+                    if not coordinates:
+                        logger.debug(f"DEBUG: Road {entry.road_segment_id} has empty coordinates")
+                        with open("traffic_endpoint_debug.log", "a") as f:
+                            f.write(f"Road {entry.road_segment_id} has empty coordinates\n")
+                        continue
+                    
+                    # Calculate congestion level (0.0 to 1.0) based on multiple factors
+                    congestion = 0.5  # default
+                    
+                    # Factor 1: Speed-based (lower speed = higher congestion)
+                    if entry.average_speed:
+                        speed_factor = max(0.0, min(1.0, 1.0 - (entry.average_speed / 80.0)))
+                    else:
+                        speed_factor = 0.5
+                    
+                    # Factor 2: Capacity-based (vehicle count vs base capacity)
+                    if segment.base_capacity and entry.vehicle_count:
+                        capacity_factor = min(1.0, entry.vehicle_count / segment.base_capacity)
+                    else:
+                        capacity_factor = 0.5
+                    
+                    # Factor 3: Congestion state
+                    state_map = {"free-flow": 0.2, "moderate": 0.5, "congested": 0.8, "heavy": 0.95}
+                    state_factor = state_map.get(entry.congestion_state, 0.5)
+                    
+                    # Weighted average: speed (40%), capacity (30%), state (30%)
+                    congestion = (speed_factor * 0.4 + capacity_factor * 0.3 + state_factor * 0.3)
+                    congestion = max(0.0, min(1.0, congestion))
+                    
+                    segments.append({
+                        "segment_id": f"seg_{entry.road_segment_id}",
+                        "name": segment.name or f"Road {entry.road_segment_id}",
+                        "coordinates": coordinates,
+                        "congestion_level": round(congestion, 2),
+                        "speed_kmh": round(entry.average_speed or 30, 1),
+                        "vehicle_count": entry.vehicle_count or 0,
+                        "timestamp": entry.timestamp.isoformat() if entry.timestamp else datetime.now().isoformat()
+                    })
+                    logger.debug(f"DEBUG: Added road {segment.name} with {len(coordinates)} points")
+            except Exception as segment_error:
+                logger.error(f"DEBUG: Error processing entry {entry.road_segment_id}: {segment_error}")
+                with open("traffic_endpoint_debug.log", "a") as f:
+                    f.write(f"Error processing entry {entry.road_segment_id}: {segment_error}\n")
+                continue
+        
+        logger.info(f"DEBUG: Returning {len(segments)} real traffic segments")
+        with open("traffic_endpoint_debug.log", "a") as f:
+            f.write(f"Returning {len(segments)} real segments\n")
+        
+        if segments:
+            with open("traffic_endpoint_debug.log", "a") as f:
+                f.write(f"Returning real data response\n")
+            return {"segments": segments, "timestamp": datetime.now().isoformat()}
+        else:
+            logger.info("DEBUG: No valid segments built, using mock")
+            with open("traffic_endpoint_debug.log", "a") as f:
+                f.write(f"No valid segments, returning mock\n")
+            mock_segments = _generate_mock_traffic_segments()
+            return {"segments": mock_segments, "timestamp": datetime.now().isoformat(), "mock": True}
+    
+    except Exception as e:
+        logger.error(f"DEBUG: Exception in traffic_live_all: {e}")
+        with open("traffic_endpoint_debug.log", "a") as f:
+            f.write(f"EXCEPTION: {e}\n")
+        import traceback
+        logger.error(traceback.format_exc())
+        with open("traffic_endpoint_debug.log", "a") as f:
+            f.write(f"Traceback:\n{traceback.format_exc()}\n")
+        # Fallback to mock
+        mock_segments = _generate_mock_traffic_segments()
+        return {"segments": mock_segments, "timestamp": datetime.now().isoformat(), "mock": True}
         # Return real data if available
         segments = []
         for entry in entries:
             segment = db.query(models.RoadNetwork).filter(models.RoadNetwork.id == entry.road_segment_id).first()
-            if segment:
-                # Calculate congestion level (0.0 to 1.0)
-                congestion = 0.5  # default
-                if entry.average_speed:
-                    # Lower speed = higher congestion
-                    congestion = max(0.0, min(1.0, 1.0 - (entry.average_speed / 80.0)))
-                
-                segments.append({
-                    "segment_id": f"seg_{entry.road_segment_id}",
-                    "coordinates": [[segment.start_lon, segment.start_lat], [segment.end_lon, segment.end_lat]],
-                    "congestion_level": round(congestion, 2),
-                    "speed_kmh": entry.average_speed or 30,
-                    "vehicle_count": entry.vehicle_count or 0,
-                    "timestamp": entry.timestamp.isoformat() if entry.timestamp else datetime.now().isoformat()
-                })
+            if segment and segment.geometry:
+                try:
+                    # Parse geometry JSON
+                    geom = json.loads(segment.geometry)
+                    coordinates = geom.get("coordinates", [])
+                    
+                    if not coordinates:
+                        continue
+                    
+                    # Calculate congestion level (0.0 to 1.0) based on multiple factors
+                    congestion = 0.5  # default
+                    
+                    # Factor 1: Speed-based (lower speed = higher congestion)
+                    if entry.average_speed:
+                        speed_factor = max(0.0, min(1.0, 1.0 - (entry.average_speed / 80.0)))
+                    else:
+                        speed_factor = 0.5
+                    
+                    # Factor 2: Capacity-based (vehicle count vs base capacity)
+                    if segment.base_capacity and entry.vehicle_count:
+                        capacity_factor = min(1.0, entry.vehicle_count / segment.base_capacity)
+                    else:
+                        capacity_factor = 0.5
+                    
+                    # Factor 3: Congestion state
+                    state_map = {"free-flow": 0.2, "moderate": 0.5, "congested": 0.8, "heavy": 0.95}
+                    state_factor = state_map.get(entry.congestion_state, 0.5)
+                    
+                    # Weighted average: speed (40%), capacity (30%), state (30%)
+                    congestion = (speed_factor * 0.4 + capacity_factor * 0.3 + state_factor * 0.3)
+                    congestion = max(0.0, min(1.0, congestion))
+                    
+                    segments.append({
+                        "segment_id": f"seg_{entry.road_segment_id}",
+                        "name": segment.name or f"Road {entry.road_segment_id}",
+                        "coordinates": coordinates,
+                        "congestion_level": round(congestion, 2),
+                        "speed_kmh": round(entry.average_speed or 30, 1),
+                        "vehicle_count": entry.vehicle_count or 0,
+                        "timestamp": entry.timestamp.isoformat() if entry.timestamp else datetime.now().isoformat()
+                    })
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    # Skip segments with invalid geometry
+                    continue
         
-        return {"segments": segments, "timestamp": datetime.now().isoformat()}
+        if segments:
+            return {"segments": segments, "timestamp": datetime.now().isoformat()}
     
     # Generate mock traffic data for Ahmedabad area
     mock_segments = _generate_mock_traffic_segments()

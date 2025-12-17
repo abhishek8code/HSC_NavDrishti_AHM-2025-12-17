@@ -12,6 +12,8 @@
     let routeCoordinates = [];
     let clickSelectMode = false;
     let clickMarkers = [];
+    let selectedAlternative = null; // Track selected alternative for CO2 calculation
+    let originalRouteEmission = null; // Track original route emission for comparison
     
     // Initialize: prefer reusing the dashboard map. Wait for 'dashboardMapReady' or poll for it.
     (function waitForMap() {
@@ -433,19 +435,69 @@
             `Construction Project - ${roadType} (${lengthKm.toFixed(1)} km)`
         );
 
+        // Duration (days) to determine expected completion window
+        const durationInput = document.getElementById('projectDaysInput');
+        const durationDays = durationInput && durationInput.value ? parseInt(durationInput.value, 10) : null;
+        const startDateIso = new Date().toISOString();
+        const endDateIso = durationDays && durationDays > 0
+            ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+            : null;
+
         if (!projectName) {
             return; // User cancelled
         }
 
+        // Calculate emission reduction if alternative was selected
+        let emissionReductionEstimate = null;
+        if (selectedAlternative) {
+            // Get original route emission (estimate: 120g CO2 per km)
+            const originalEmission = lengthKm * 120;
+            
+            // Get selected alternative emission
+            const alternativeEmission = selectedAlternative.emission_g || 
+                                       (selectedAlternative.distance_km ? selectedAlternative.distance_km * 120 : null);
+            
+            if (alternativeEmission != null) {
+                // Calculate savings (positive = emissions reduced)
+                emissionReductionEstimate = Math.round(originalEmission - alternativeEmission);
+                console.log(`CO2 Savings: Original ${originalEmission}g - Alternative ${alternativeEmission}g = ${emissionReductionEstimate}g saved`);
+            }
+        }
+
+        // Build optional summary for the selected alternative route
+        let altSummary = null;
+        if (selectedAlternative) {
+            const dist = selectedAlternative.distance_km || selectedAlternative.lengthKm;
+            const time = selectedAlternative.travel_time_min || selectedAlternative.duration_min;
+            const co2 = selectedAlternative.emission_g;
+            const roadClasses = selectedAlternative.road_classes && selectedAlternative.road_classes.length
+                ? selectedAlternative.road_classes.join(', ')
+                : null;
+            const turns = selectedAlternative.turn_count;
+
+            const parts = [];
+            if (dist) parts.push(`${dist.toFixed ? dist.toFixed(2) : dist} km`);
+            if (time) parts.push(`${Math.round(time)} min`);
+            if (co2 != null) parts.push(`${Math.round(co2)}g CO₂`);
+            if (turns != null) parts.push(`${turns} turns`);
+            if (roadClasses) parts.push(`Streets: ${roadClasses}`);
+            if (parts.length) altSummary = parts.join(' • ');
+        }
+
+        const baseAllocation = `${lanes} lanes, ${lengthKm.toFixed(2)} km ${roadType}`;
+        const allocationWithAlt = altSummary ? `${baseAllocation} | Alt: ${altSummary}` : baseAllocation;
+
         const projectData = {
             name: projectName,
             status: 'planned',
+            startTime: startDateIso,
+            endTime: endDateIso,
             startLat: routeCoordinates[0][1],
             startLon: routeCoordinates[0][0],
             endLat: routeCoordinates[routeCoordinates.length - 1][1],
             endLon: routeCoordinates[routeCoordinates.length - 1][0],
-            resourceAllocation: `${lanes} lanes, ${lengthKm.toFixed(2)} km ${roadType}`,
-            emissionReductionEstimate: null
+            resourceAllocation: allocationWithAlt,
+            emissionReductionEstimate: emissionReductionEstimate
         };
 
         try {
@@ -462,7 +514,8 @@
                         start_lon: projectData.startLon,
                         end_lat: projectData.endLat,
                         end_lon: projectData.endLon,
-                        resource_allocation: projectData.resourceAllocation
+                        resource_allocation: projectData.resourceAllocation,
+                        emission_reduction_estimate: projectData.emissionReductionEstimate
                     })
                 });
 
@@ -822,6 +875,9 @@
             }
             
             selectedAltId = rid;
+            
+            // Store selected alternative for CO2 calculation
+            selectedAlternative = route;
 
             // Zoom to route with animation
             const coords = route.coordinates || (route.geometry && route.geometry.coordinates) || [];

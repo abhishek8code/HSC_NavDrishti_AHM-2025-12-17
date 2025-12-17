@@ -82,6 +82,13 @@ namespace Traffic_Frontend.Controllers
             ViewBag.BackendApiUrl = _configuration["BackendApi:BaseUrl"] ?? "http://localhost:8000";
             return View();
         }
+
+        public IActionResult ConstructionPlanning()
+        {
+            ViewBag.MapboxToken = _configuration["Mapbox:AccessToken"];
+            ViewBag.BackendApiUrl = _configuration["BackendApi:BaseUrl"] ?? "http://localhost:8002";
+            return View();
+        }
     }
 }
 

@@ -35,6 +35,13 @@
                         <div class="mb-2"><strong>Road Type:</strong> <span id="roadType">-</span></div>
                         <div class="mb-2"><strong>Road Width:</strong> <span id="roadWidth">-</span> m</div>
                         <div class="mb-2"><strong>Lanes:</strong> <span id="roadLanes">-</span></div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold" for="projectDaysInput">
+                                <i class="bi bi-calendar-check"></i> Number of Days of Construction
+                            </label>
+                            <input id="projectDaysInput" type="number" class="form-control form-control-sm" value="30" min="1" max="365" step="1" placeholder="Enter days">
+                            <div class="form-text">Used to monitor construction progress and set project completion deadline.</div>
+                        </div>
                         <hr>
                         <h6 class="fw-bold mb-2">Traffic Analysis</h6>
                         <div class="mb-2"><strong>Total Vehicles:</strong> <span id="vehicleCount">-</span></div>
@@ -90,8 +97,36 @@
                         <span id="mapStatusBadge" class="badge bg-secondary">Map: initializing</span>
                     </div>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-0" style="position: relative;">
                     <div id="dashboardMap" style="width:100%; height:80vh;"></div>
+
+                    <!-- Alternatives Panel (overlay) -->
+                    <div id="altRoutesPanel" class="position-absolute top-0 end-0 m-3" style="width: 320px; max-height: 70vh; overflow-y: auto; display: none;">
+                        <div class="card shadow">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="bi bi-signpost-split"></i> Alternative Routes</span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="hideAltPanel">Hide</button>
+                            </div>
+                            <div class="card-body p-2" id="altRoutesList">
+                                <div class="alert alert-info p-2 small mb-0">
+                                    Draw a route to see alternatives
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Alternative Info (overlay) -->
+                    <div id="selectedAltInfo" class="position-absolute bottom-0 start-0 m-3" style="display: none;">
+                        <div class="card shadow-sm" style="min-width: 280px;">
+                            <div class="card-body p-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong id="selectedAltTitle">Alternative</strong>
+                                    <span class="badge" id="selectedAltTraffic">Traffic</span>
+                                </div>
+                                <div class="small text-muted mt-1" id="selectedAltMetrics">—</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -142,4 +177,105 @@
     <!-- Initialize map and route selection -->
     <script src="~/js/dashboard.js?v=2"></script>
     <script src="~/js/routeSelection.js?v=3"></script>
+
+    <script>
+        // Toggle Alternatives panel visibility
+        (function() {
+            const panel = document.getElementById('altRoutesPanel');
+            const list = document.getElementById('altRoutesList');
+            const hideBtn = document.getElementById('hideAltPanel');
+            const selectedInfo = document.getElementById('selectedAltInfo');
+            const selectedTitle = document.getElementById('selectedAltTitle');
+            const selectedTraffic = document.getElementById('selectedAltTraffic');
+            const selectedMetrics = document.getElementById('selectedAltMetrics');
+
+            if (hideBtn) {
+                hideBtn.addEventListener('click', function() {
+                    panel.style.display = 'none';
+                });
+            }
+
+            function trafficBadgeClass(score) {
+                if (score == null) return 'bg-secondary';
+                if (score >= 0.7) return 'bg-success';
+                if (score >= 0.4) return 'bg-warning';
+                return 'bg-danger';
+            }
+
+            // Populate alternatives list when provided by routeSelection
+            document.addEventListener('routes:alternatives', function(e) {
+                try {
+                    const detail = e.detail || {};
+                    const routes = detail.allAlternatives || [];
+                    if (!routes.length) {
+                        list.innerHTML = '<div class="alert alert-info p-2 small mb-0">No alternatives found</div>';
+                        panel.style.display = 'block';
+                        return;
+                    }
+
+                    const html = routes.map(function(r, idx) {
+                        const id = r.routeId || r.id || (idx + 1);
+                        const dist = (r.distance_km || r.lengthKm || 0).toFixed(2);
+                        const time = (r.travel_time_min || Math.round((r.lengthKm || 0) * 2));
+                        const score = r.traffic_score != null ? r.traffic_score : (r.suitabilitySelect != null ? r.suitabilityScore : null);
+                        const emission = r.emission_g || (r.distance_km ? Math.round(r.distance_km * 120) : null);
+                        const turnCount = r.turn_count || 0;
+                        const roadClasses = r.road_classes && r.road_classes.length ? r.road_classes.join(', ') : 'Standard';
+
+                        return '<div class="card mb-2 border-0 shadow-sm">' +
+                        '<div class="card-body p-2">' +
+                            '<div class="d-flex justify-content-between align-items-center">' +
+                                '<div>' +
+                                    '<strong>Route ' + (idx + 1) + '</strong>' +
+                                    '<div class="small text-muted">' + dist + ' km • ' + time + ' min</div>' +
+                                    (emission ? '<div class="small text-muted">~' + emission + 'g CO₂</div>' : '') +
+                                    (roadClasses !== 'Standard' ? '<div class="small text-info">Streets: ' + roadClasses + '</div>' : '') +
+                                '</div>' +
+                                '<div class="d-flex gap-1">' +
+                                    '<button class="btn btn-sm btn-outline-primary" data-route="' + id + '" data-action="select">Select</button>' +
+                                    '<button class="btn btn-sm btn-outline-secondary" data-route="' + id + '" data-action="details">Details</button>' +
+                                '</div>' +
+                            '</div>' +
+                            (score != null ? '<div class="mt-1"><span class="badge ' + trafficBadgeClass(score) + '">Traffic ' + Math.round(score * 100) + '%</span></div>' : '') +
+                            (turnCount > 0 ? '<div class="mt-1"><span class="badge bg-secondary">Turns: ' + turnCount + '</span></div>' : '') +
+                        '</div>' +
+                    '</div>';
+                    }).join('');
+
+                    list.innerHTML = html;
+                    panel.style.display = 'block';
+                } catch(err) { console.warn('alternatives render error', err); }
+            });
+
+            // Show selected alternative info
+            document.addEventListener('routes:alternativeSelected', function(e) {
+                try {
+                    const route = (e.detail && e.detail.route) || {};
+                    const dist = route.distance_km || (route.lengthKm || (route.raw && route.raw.distance_km));
+                    const time = route.travel_time_min || (route.duration_min || Math.round((dist || 0) * 2));
+                    const score = route.traffic_score != null ? route.traffic_score : (route.raw && route.raw.traffic_score);
+                    const emission = route.emission_g || (dist ? dist * 120 : null);
+                    const roadClasses = route.road_classes && route.road_classes.length ? route.road_classes.join(', ') : null;
+                    const turnCount = route.turn_count || 0;
+
+                    selectedTitle.textContent = 'Selected Route';
+                    selectedTraffic.className = 'badge ' + trafficBadgeClass(score);
+                    selectedTraffic.textContent = 'Traffic ' + (score != null ? Math.round(score * 100) + '%' : 'N/A');
+                    
+                    let metricsText = (dist ? dist.toFixed ? dist.toFixed(2) : dist : 'N/A') + ' km • ' + (time || 'N/A') + ' min';
+                    if (emission) {
+                        metricsText += ' • ' + Math.round(emission) + 'g CO₂';
+                    }
+                    if (turnCount > 0) {
+                        metricsText += ' • ' + turnCount + ' turns';
+                    }
+                    if (roadClasses) {
+                        metricsText += ' • Streets: ' + roadClasses;
+                    }
+                    selectedMetrics.textContent = metricsText;
+                    selectedInfo.style.display = 'block';
+                } catch(err) { console.warn('selection info error', err); }
+            });
+        })();
+    </script>
 }

@@ -1,0 +1,303 @@
+@using Traffic_Frontend.Services
+@{
+    ViewData["Title"] = "Projects";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+    var projects = ViewBag.Projects as List<ProjectDto> ?? new List<ProjectDto>();
+}
+
+@functions {
+    string GetStatusBadgeClass(string? status)
+    {
+        return status?.ToLower() switch
+        {
+            "active" => "bg-success",
+            "completed" => "bg-info",
+            "planned" => "bg-warning",
+            "cancelled" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-folder"></i> Project Manager</h2>
+            <p class="text-muted mb-0">Manage traffic projects and route configurations</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-primary" href="/Home/ProjectCreation"><i class="bi bi-plus-circle"></i> New Project</a>
+            <a class="btn btn-outline-secondary" href="/Operations"><i class="bi bi-map"></i> Operations</a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Status</label>
+                    <select class="form-select form-select-sm" id="statusFilter">
+                        <option value="">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="planned">Planned</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Date Range</label>
+                    <select class="form-select form-select-sm" id="dateFilter">
+                        <option value="all">All Time</option>
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="90">Last 90 Days</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Search</label>
+                    <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search projects...">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project List -->
+    @if (projects.Count == 0)
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+            <h5 class="text-muted mt-3">No Projects Yet</h5>
+            <p class="text-muted">Create your first project to get started</p>
+            <a class="btn btn-primary" href="/Home/ProjectCreation"><i class="bi bi-plus-circle"></i> Create Project</a>
+        </div>
+    }
+    else
+    {
+        <div class="row g-3" id="projectList">
+            @foreach (var project in projects)
+            {
+                <div class="col-md-6 col-lg-4 project-card" data-status="@project.Status?.ToLower()" data-name="@project.Name?.ToLower()">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">@project.Name</h6>
+                                <span class="badge @GetStatusBadgeClass(project.Status)">@project.Status</span>
+                            </div>
+                            <p class="text-muted small mb-2">@project.ResourceAllocation</p>
+                            <div class="small text-muted mb-3">
+                                @if (!string.IsNullOrEmpty(project.StartTime))
+                                {
+                                    <div><i class="bi bi-calendar-event"></i> Started: @DateTime.Parse(project.StartTime).ToString("MMM dd, yyyy")</div>
+                                }
+                                @if (project.StartLat.HasValue && project.StartLon.HasValue)
+                                {
+                                    <div><i class="bi bi-geo-alt"></i> <strong>From:</strong> @project.StartLat?.ToString("F4"), @project.StartLon?.ToString("F4")</div>
+                                }
+                                @if (project.EndLat.HasValue && project.EndLon.HasValue)
+                                {
+                                    <div><i class="bi bi-geo-alt-fill"></i> <strong>To:</strong> @project.EndLat?.ToString("F4"), @project.EndLon?.ToString("F4")</div>
+                                }
+                                @if (project.EmissionReductionEstimate.HasValue && project.EmissionReductionEstimate.Value > 0)
+                                {
+                                    <div class="mt-2"><i class="bi bi-tree"></i> CO₂ Saved: <span class="badge bg-success">@Math.Round(project.EmissionReductionEstimate.Value)g</span></div>
+                                }
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="/Home/ProjectCreation?projectId=@project.Id" class="btn btn-sm btn-outline-primary flex-fill">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="showProjectDetails(@project.Id)" data-bs-toggle="modal" data-bs-target="#projectDetailsModal">
+                                    <i class="bi bi-eye"></i> Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination (placeholder) -->
+        <div class="d-flex justify-content-center mt-4">
+            <nav>
+                <ul class="pagination pagination-sm">
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                </ul>
+            </nav>
+        </div>
+    }
+
+    <!-- Project Details Modal -->
+    <div class="modal fade" id="projectDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="projectDetailsTitle">Project Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="projectDetailsContent">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <a id="editProjectBtn" href="#" class="btn btn-primary"><i class="bi bi-pencil"></i> Edit Project</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let allProjects = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(projects));
+
+        function getStatusBadgeClass(status) {
+            if (!status) return 'bg-secondary';
+            switch(status.toLowerCase()) {
+                case 'active': return 'bg-success';
+                case 'completed': return 'bg-info';
+                case 'planned': return 'bg-warning';
+                case 'cancelled': return 'bg-danger';
+                default: return 'bg-secondary';
+            }
+        }
+
+        async function showProjectDetails(projectId) {
+            console.log('showProjectDetails called with ID:', projectId);
+            console.log('Available projects:', allProjects);
+            
+            const project = allProjects.find(p => p.id === projectId);
+            
+            const title = document.getElementById('projectDetailsTitle');
+            const content = document.getElementById('projectDetailsContent');
+            const editBtn = document.getElementById('editProjectBtn');
+            
+            if (!project) {
+                console.warn('Project not found in cached list');
+                content.innerHTML = '<div class="alert alert-warning mb-0">Project details are unavailable. Please reload the page to refresh the project list.</div>';
+                return;
+            }
+
+            console.log('Project found:', project);
+
+            title.textContent = project.name;
+            editBtn.href = `/Home/ProjectCreation?projectId=${projectId}`;
+
+            // Extract alternative summary if embedded in resourceAllocation
+            let altSummary = null;
+            if (project.resourceAllocation && project.resourceAllocation.includes('Alt:')) {
+                const parts = project.resourceAllocation.split('Alt:');
+                if (parts.length > 1) altSummary = parts[1].trim();
+            }
+
+            let detailsHtml = `
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="bi bi-info-circle"></i> Project Information</h6>
+                                <p class="mb-2"><strong>Name:</strong> ${project.name || 'N/A'}</p>
+                                <p class="mb-2"><strong>Status:</strong> <span class="badge ${getStatusBadgeClass(project.status)}">${project.status || 'Unknown'}</span></p>
+                                <p class="mb-2"><strong>Resource Allocation:</strong> ${project.resourceAllocation || 'Not specified'}</p>
+                                ${altSummary ? `<p class="mb-0"><strong>Alternative Route:</strong> ${altSummary}</p>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="bi bi-tree"></i> Environmental Impact</h6>
+                                ${project.emissionReductionEstimate ? `
+                                    <p class="mb-2"><strong>CO₂ Saved:</strong> <span class="badge bg-success">${Math.round(project.emissionReductionEstimate)}g CO₂</span></p>
+                                    <p class="small text-muted mb-0">Calculated from selected alternative route</p>
+                                ` : `
+                                    <p class="mb-2 text-muted">No emissions data available</p>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-2">
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="bi bi-geo-alt"></i> Route Details</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p class="mb-2"><strong>Start Location:</strong></p>
+                                        <p class="small text-muted">
+                                            Latitude: ${project.startLat ? project.startLat.toFixed(6) : 'N/A'}<br>
+                                            Longitude: ${project.startLon ? project.startLon.toFixed(6) : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p class="mb-2"><strong>End Location:</strong></p>
+                                        <p class="small text-muted">
+                                            Latitude: ${project.endLat ? project.endLat.toFixed(6) : 'N/A'}<br>
+                                            Longitude: ${project.endLon ? project.endLon.toFixed(6) : 'N/A'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-2">
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="bi bi-calendar-event"></i> Timeline</h6>
+                                <p class="mb-2">
+                                    <strong>Started:</strong> 
+                                    ${project.startTime ? new Date(project.startTime).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : 'Not set'}
+                                </p>
+                                <p class="mb-0">
+                                    <strong>Completed:</strong> 
+                                    ${project.endTime ? new Date(project.endTime).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : 'In progress'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = detailsHtml;
+        }
+
+        // Filter logic
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusFilter = document.getElementById('statusFilter');
+            const dateFilter = document.getElementById('dateFilter');
+            const searchInput = document.getElementById('searchInput');
+            const projectCards = document.querySelectorAll('.project-card');
+
+            function applyFilters() {
+                const status = statusFilter?.value.toLowerCase() || '';
+                const search = searchInput?.value.toLowerCase() || '';
+
+                projectCards.forEach(card => {
+                    const cardStatus = card.dataset.status || '';
+                    const cardName = card.dataset.name || '';
+                    
+                    const statusMatch = !status || cardStatus === status;
+                    const searchMatch = !search || cardName.includes(search);
+
+                    if (statusMatch && searchMatch) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+
+            statusFilter?.addEventListener('change', applyFilters);
+            dateFilter?.addEventListener('change', applyFilters);
+            searchInput?.addEventListener('input', applyFilters);
+        });
+    </script>
+}

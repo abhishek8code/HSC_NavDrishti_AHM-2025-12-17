@@ -56,6 +56,14 @@ class ProjectOut(BaseModel):
     id: int
     name: str
     status: ProjectStatus
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    start_lat: Optional[float] = None
+    start_lon: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lon: Optional[float] = None
+    resource_allocation: Optional[str] = None
+    emission_reduction_estimate: Optional[float] = None
 
     # Pydantic v2 configuration
     model_config = ConfigDict(from_attributes=True)

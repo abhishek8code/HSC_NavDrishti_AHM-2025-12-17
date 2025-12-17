@@ -12,6 +12,11 @@ import os
 import httpx
 import json
 from urllib.parse import quote
+import sys
+
+# Import centralized Mapbox service
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from mapbox_service import get_diversion_routes
 
 router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -608,84 +613,88 @@ async def map_match_gps(request: MapMatchingRequest):
 @router.post("/recommend")
 async def recommend_routes(payload: RouteAnalyzeRequest, db: Session = Depends(get_db)):
     """
-    Recommendation endpoint that uses Mapbox Directions API to get alternative routes.
+    Recommendation endpoint that uses centralized Mapbox service to get alternative routes.
     Returns up to 3 alternative routes with real road-following geometry.
+    
+    Now uses the mapbox_service.py module for:
+    - Secure API key handling
+    - Comprehensive error handling
+    - Audit logging
+    - Cost control
     """
-    # Get Mapbox access token from environment
+    # Check if Mapbox token is available
     mapbox_token = os.getenv('MAPBOX_ACCESS_TOKEN')
     
     if not mapbox_token:
         # Fallback to mock if no Mapbox token
+        print("[routes.recommend] No MAPBOX_ACCESS_TOKEN found, using mock data")
         return _generate_mock_alternatives(payload)
     
-    # Build coordinate list for Mapbox
-    coords = [[payload.start_lon, payload.start_lat]]
-    if payload.waypoints:
-        coords.extend([[wp['lon'], wp['lat']] for wp in payload.waypoints])
-    coords.append([payload.end_lon, payload.end_lat])
-    
-    # Format coordinates for Mapbox: "lon,lat;lon,lat;..."
-    coordinates_str = ";".join([f"{c[0]},{c[1]}" for c in coords])
-    
-    # Call Mapbox Directions API with alternatives - use driving-traffic profile for real-time traffic
-    mapbox_url = f"https://api.mapbox.com/directions/v5/mapbox/driving-traffic/{coordinates_str}"
-    params = {
-        'access_token': mapbox_token,
-        'alternatives': 'true',
-        'geometries': 'geojson',
-        'overview': 'full',
-        'steps': 'false'
-    }
-    
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(mapbox_url, params=params)
-            if response.status_code != 200:
-                return {
-                    "error": f"Directions failed: status {response.status_code}",
-                    "details": response.text,
-                    "routes": []
-                }
-            data = response.json()
+        # Use centralized Mapbox service for route calculation
+        origin = (payload.start_lon, payload.start_lat)
+        destination = (payload.end_lon, payload.end_lat)
         
-        if 'routes' not in data or not data['routes']:
+        # Call the secure Mapbox service with street-level routing
+        mapbox_result = await get_diversion_routes(
+            origin=origin,
+            destination=destination,
+            avoid_polygon=None,  # No avoidance polygon for general recommendations
+            alternatives=3,
+            profile="driving-traffic",  # Traffic-aware street routing
+            include_streets=True  # Include local streets, not just highways
+        )
+        
+        if not mapbox_result.get("success"):
+            print(f"[routes.recommend] Mapbox service returned error, using mock data")
             return _generate_mock_alternatives(payload)
         
+        # Transform Mapbox service response to match frontend expectations
         routes = []
-        for i, route in enumerate(data['routes'][:3]):  # Limit to 3 routes
-            geometry = route.get('geometry', {})
-            route_coords = geometry.get('coordinates', [])
+        for i, route in enumerate(mapbox_result.get("routes", [])[:3]):
+            # Extract geometry coordinates
+            geometry = route.get("geometry", {})
+            route_coords = geometry.get("coordinates", [])
             
-            # Distance in meters, convert to km
-            distance_m = route.get('distance', 0)
-            distance_km = round(distance_m / 1000, 4)
+            # Get metrics from Mapbox service response
+            distance_km = route.get("distance_km", 0)
+            travel_time_min = route.get("duration_minutes", 0)
             
-            # Duration in seconds, convert to minutes
-            duration_s = route.get('duration', 0)
-            travel_time_min = max(1, int(duration_s / 60))
+            # Calculate traffic score (normalize based on time vs distance ratio)
+            # Better traffic = lower time per km
+            time_per_km = travel_time_min / distance_km if distance_km > 0 else 1
+            traffic_score = round(1.0 / (1.0 + time_per_km), 3)
             
-            # Calculate traffic score (normalized inverse of duration)
-            traffic_score = round(1.0 / (1.0 + duration_s / 3600), 3)
-            
-            # Estimate emissions based on distance
+            # Estimate emissions: ~120g CO2 per km for average vehicle
             emission_g = max(50, int(distance_km * 120))
             
             routes.append({
                 "id": f"mapbox-{i+1}",
-                "name": f"Route {i+1}" if len(data['routes']) > 1 else "Main Route",
+                "name": f"Route {i+1}" if len(mapbox_result["routes"]) > 1 else "Main Route",
                 "coordinates": route_coords,
                 "distance_km": distance_km,
                 "travel_time_min": travel_time_min,
                 "traffic_score": traffic_score,
                 "emission_g": emission_g,
-                "rank": i + 1
+                "rank": i + 1,
+                # Street-level precision details
+                "turn_count": route.get("turn_count", 0),
+                "road_classes": route.get("road_classes", []),
+                "turn_instructions": route.get("turn_instructions", []),
+                "routing_profile": route.get("profile", "driving-traffic"),
             })
         
+        print(f"[routes.recommend] Successfully retrieved {len(routes)} routes from Mapbox service")
         return {"routes": routes}
     
+    except HTTPException as e:
+        # HTTPException from mapbox_service (401, 429, etc.)
+        print(f"[routes.recommend] Mapbox service HTTP error: {e.status_code} - {e.detail}")
+        return _generate_mock_alternatives(payload)
+    
     except Exception as e:
-        # Fallback to mock on any error
-        print(f"Mapbox API error: {e}")
+        # Any other error - fallback to mock
+        print(f"[routes.recommend] Unexpected error: {str(e)}, using mock data")
         return _generate_mock_alternatives(payload)
 
 

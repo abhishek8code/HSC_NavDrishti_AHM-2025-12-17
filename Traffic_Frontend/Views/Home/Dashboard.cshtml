@@ -16,46 +16,60 @@
         Backend unavailable at <code>@(ViewBag.BackendApiUrl ?? "http://localhost:8000")</code>. Some features may not load. Retry after starting backend.
     </div>
 
-    <h2 class="mb-4"><i class="bi bi-speedometer2"></i> Traffic Control Dashboard</h2>
+    <h2 class="mb-3"><i class="bi bi-speedometer2"></i> Traffic Control Dashboard</h2>
 
-    <!-- Overview Metrics -->
-    <div class="row mb-4">
-        <div class="col-12 col-sm-6 col-lg-4 mb-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-muted mb-3">Active Projects</h5>
-                    <h2 class="mb-0" id="activeProjects">@(ViewBag.Projects?.Count ?? 0)</h2>
-                </div>
-            </div>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+        <div class="nav nav-pills" id="dashboardTabs">
+            <button class="nav-link active" data-tab="overview" type="button"><i class="bi bi-clipboard-data"></i> Overview</button>
+            <button class="nav-link" data-tab="traffic" type="button"><i class="bi bi-activity"></i> Traffic</button>
+            <button class="nav-link" data-tab="ai" type="button"><i class="bi bi-robot"></i> AI</button>
+            <button class="nav-link" data-tab="projects" type="button"><i class="bi bi-folder"></i> Projects</button>
         </div>
-        <div class="col-12 col-sm-6 col-lg-4 mb-3">
-            <div class="card shadow-sm h-100 border-danger">
-                <div class="card-body">
-                    <h5 class="card-title text-muted mb-3">Critical Alerts</h5>
-                    <h2 class="mb-0 text-danger" id="criticalAlerts">0</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-12 col-sm-6 col-lg-4 mb-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-muted mb-3">CO2 Saved</h5>
-                    <h2 class="mb-0 text-success" id="co2Saved">0 kg</h2>
-                </div>
-            </div>
-        </div>
+        <a class="btn btn-outline-primary btn-sm" href="/Operations"><i class="bi bi-map"></i> Open Operations Center</a>
     </div>
 
-    <!-- Project Creation Link -->
-    <div class="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
-        <div>
-            <strong>Route Selection & Live Map:</strong> Create projects and view real-time traffic on the dedicated page.
-        </div>
-        <a class="btn btn-primary" href="@Url.Action("ProjectCreation","Home")">
-            <i class="bi bi-box-arrow-right"></i> Go to Project Creation
-        </a>
-    </div>
+    <div id="dashboardTabContent">
+        <div class="tab-section" data-tab="overview">
+            <!-- Overview Metrics -->
+            <div class="row mb-4">
+                <div class="col-12 col-sm-6 col-lg-4 mb-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title text-muted mb-3">Active Projects</h5>
+                            <h2 class="mb-0" id="activeProjects">@(ViewBag.Projects?.Count ?? 0)</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-sm-6 col-lg-4 mb-3">
+                    <div class="card shadow-sm h-100 border-danger">
+                        <div class="card-body">
+                            <h5 class="card-title text-muted mb-3">Critical Alerts</h5>
+                            <h2 class="mb-0 text-danger" id="criticalAlerts">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-sm-6 col-lg-4 mb-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title text-muted mb-3">CO2 Saved</h5>
+                            <h2 class="mb-0 text-success" id="co2Saved">0 kg</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
+            <!-- Project Creation Link -->
+            <div class="alert alert-info d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+                <div>
+                    <strong>Route Selection & Live Map:</strong> Create projects and view real-time traffic on the dedicated page.
+                </div>
+                <a class="btn btn-primary" href="@Url.Action("ProjectCreation","Home")">
+                    <i class="bi bi-box-arrow-right"></i> Go to Project Creation
+                </a>
+            </div>
+        </div>
+
+    <div class="tab-section d-none" data-tab="ai">
     <!-- AI Model Information -->
     <div class="card shadow-sm mb-4">
         <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
@@ -126,23 +140,6 @@
         </div>
     </div>
 
-    <!-- Analytics Charts -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0"><i class="bi bi-graph-up"></i> Traffic Analytics</h5>
-        </div>
-        <div class="card-body">
-            <h6 class="mb-3">24-Hour Traffic Trends</h6>
-            <div class="mb-4" style="position: relative; height: 300px;">
-                <canvas id="trafficTrendChart" style="width:100%; height:100%;"></canvas>
-            </div>
-            <h6 class="mb-3">Congestion Distribution</h6>
-            <div class="mb-3" style="position: relative; height: 300px;">
-                <canvas id="speedProfilesChart" style="width:100%; height:100%;"></canvas>
-            </div>
-        </div>
-    </div>
-
     <!-- AI Predictions -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-primary text-white">
@@ -159,18 +156,44 @@
         </div>
     </div>
 
-    <!-- Alternative Routes -->
+    </div> <!-- /tab-section ai -->
+
+    <!-- Analytics Charts -->
+    <div class="tab-section d-none" data-tab="traffic">
     <div class="card shadow-sm mb-4">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><i class="bi bi-signpost-split"></i> Alternative Routes Analysis</h5>
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0"><i class="bi bi-graph-up"></i> Traffic Analytics</h5>
         </div>
         <div class="card-body">
-            <div id="alternativesContainer">
-                <p class="text-muted">Select a route from the Project Creation page to view AI-powered alternative route suggestions here.</p>
+            <h6 class="mb-3">24-Hour Traffic Trends</h6>
+            <div class="mb-4" style="position: relative; height: 300px;">
+                <canvas id="trafficTrendChart" style="width:100%; height:100%;"></canvas>
+            </div>
+            <h6 class="mb-3">Congestion Distribution</h6>
+            <div class="mb-3" style="position: relative; height: 300px;">
+                <canvas id="speedProfilesChart" style="width:100%; height:100%;"></canvas>
             </div>
         </div>
     </div>
 
+    </div> <!-- /tab-section traffic -->
+
+    <div class="tab-section d-none" data-tab="projects">
+        <!-- Alternative Routes -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-signpost-split"></i> Alternative Routes Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div id="alternativesContainer">
+                    <p class="text-muted">Select a route from the Project Creation page to view AI-powered alternative route suggestions here.</p>
+                </div>
+                <a class="btn btn-outline-primary btn-sm mt-3" href="/Projects"><i class="bi bi-folder"></i> Go to Project Manager</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-section d-none" data-tab="traffic">
     <!-- Traffic Alerts -->
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-danger text-white d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
@@ -236,6 +259,7 @@
             </div>
         </div>
     </div>
+    </div> <!-- /tab-section traffic (alerts + stats) -->
 
 </div>
 
@@ -457,40 +481,30 @@
                 if(banner){ banner.classList.remove('d-none'); }
             }
         })();
-        // Activate specific pane from hash (e.g., #insights, #routing, #alerts)
+
+        // Simple tab controller for dashboard
         document.addEventListener('DOMContentLoaded', function(){
-            var hash = (window.location.hash || '').toLowerCase();
-            var map = {
-                '#insights': 'pane-insights',
-                '#routing': 'pane-routing',
-                '#alerts': 'pane-alerts',
-                '#overview': 'pane-overview'
-            };
-            var targetId = map[hash];
-            if(targetId){
-                ['pane-overview','pane-routing','pane-insights','pane-alerts'].forEach(function(id){
-                    var el = document.getElementById(id);
-                    if(el){ el.classList.remove('show','active'); }
+            var tabs = document.querySelectorAll('#dashboardTabs .nav-link');
+            var sections = document.querySelectorAll('.tab-section');
+
+            function showTab(name){
+                sections.forEach(function(sec){
+                    var isMatch = sec.dataset.tab === name;
+                    sec.classList.toggle('d-none', !isMatch);
                 });
-                var pane = document.getElementById(targetId);
-                if(pane){ pane.classList.add('show','active'); }
-                var tabMap = {
-                    'pane-overview': 'tab-overview',
-                    'pane-routing': 'tab-routing',
-                    'pane-insights': 'tab-insights',
-                    'pane-alerts': 'tab-alerts'
-                };
-                Object.keys(tabMap).forEach(function(pid){
-                    var btn = document.getElementById(tabMap[pid]);
-                    if(btn){ btn.classList.toggle('active', pid === targetId); }
+                tabs.forEach(function(btn){
+                    btn.classList.toggle('active', btn.dataset.tab === name);
                 });
-            } else {
-                // Default: show overview on Dashboard now that routing moved
-                var pane = document.getElementById('pane-overview');
-                if(pane){ pane.classList.add('show','active'); }
-                var btn = document.getElementById('tab-overview');
-                if(btn){ btn.classList.add('active'); }
             }
+
+            tabs.forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    showTab(btn.dataset.tab);
+                });
+            });
+
+            // Default tab
+            showTab('overview');
         });
     </script>
 }

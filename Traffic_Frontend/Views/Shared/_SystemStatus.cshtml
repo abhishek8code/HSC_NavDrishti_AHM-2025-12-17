@@ -1,0 +1,143 @@
+<div class="system-status-indicator">
+    <div class="status-badge" id="systemStatusBadge" data-bs-toggle="tooltip" data-bs-placement="bottom" title="All systems operational">
+        <span class="status-dot status-good"></span>
+        <span class="status-text d-none d-lg-inline">System</span>
+    </div>
+</div>
+
+<style>
+    .system-status-indicator {
+        display: flex;
+        align-items: center;
+    }
+
+    .status-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .status-badge:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    .status-dot.status-good {
+        background-color: #28a745;
+        box-shadow: 0 0 4px rgba(40, 167, 69, 0.6);
+    }
+
+    .status-dot.status-warning {
+        background-color: #ffc107;
+        box-shadow: 0 0 4px rgba(255, 193, 7, 0.6);
+    }
+
+    .status-dot.status-error {
+        background-color: #dc3545;
+        box-shadow: 0 0 4px rgba(220, 53, 69, 0.6);
+    }
+
+    .status-text {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: white;
+    }
+
+    @@keyframes pulse-dot {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.6;
+        }
+    }
+
+    /* Mobile adjustments */
+    @@media (max-width: 991.98px) {
+        .status-badge {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .status-text {
+            display: inline !important;
+        }
+    }
+</style>
+
+<script>
+    (function() {
+        const statusBadge = document.getElementById('systemStatusBadge');
+        const statusDot = statusBadge?.querySelector('.status-dot');
+        const statusText = statusBadge?.querySelector('.status-text');
+
+        // Check backend status
+        async function checkSystemStatus() {
+            try {
+                const backendUrl = 'http://localhost:8002';
+                const response = await fetch(`${backendUrl}/health`, {
+                    method: 'GET',
+                    signal: AbortSignal.timeout(3000)
+                });
+
+                if (response.ok) {
+                    setStatus('good', 'All systems operational');
+                } else {
+                    setStatus('warning', 'Backend degraded');
+                }
+            } catch (error) {
+                setStatus('error', 'Backend offline');
+            }
+        }
+
+        function setStatus(level, message) {
+            if (!statusDot || !statusBadge) return;
+
+            // Update dot class
+            statusDot.className = 'status-dot status-' + level;
+
+            // Update tooltip
+            statusBadge.setAttribute('data-bs-original-title', message);
+
+            // Update text if visible
+            if (statusText) {
+                const statusLabels = {
+                    good: 'System',
+                    warning: 'Degraded',
+                    error: 'Offline'
+                };
+                statusText.textContent = statusLabels[level] || 'System';
+            }
+
+            // Reinitialize tooltip
+            const tooltip = bootstrap.Tooltip.getInstance(statusBadge);
+            if (tooltip) {
+                tooltip.dispose();
+            }
+            new bootstrap.Tooltip(statusBadge);
+        }
+
+        // Check on load
+        checkSystemStatus();
+
+        // Check every 30 seconds
+        setInterval(checkSystemStatus, 30000);
+
+        // Initialize tooltip
+        if (statusBadge) {
+            new bootstrap.Tooltip(statusBadge);
+        }
+    })();
+</script>

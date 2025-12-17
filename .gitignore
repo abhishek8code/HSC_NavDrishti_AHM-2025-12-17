@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+.env
+.env.*
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+traffic_endpoint_debug.log
+
+# SQLite / Databases
+*.db
+*.sqlite3
+
+# VS/IDE
+.vscode/
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# .NET build
+**/bin/
+**/obj/
+*.cache
+
+# Python notebooks and checkpoints
+.ipynb_checkpoints/
+
+# Alembic compiled artifacts
+Traffic_Backend/alembic/versions/*.pyc
+
+# Build outputs
+build/
+dist/
+
+# Misc
+*.coverage
+coverage.xml

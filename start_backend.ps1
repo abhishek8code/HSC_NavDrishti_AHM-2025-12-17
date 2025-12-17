@@ -15,6 +15,20 @@ Set-Location $PSScriptRoot
 $env:DATABASE_URL = "sqlite:///./navdrishti.db"
 $env:SQLALCHEMY_DATABASE_URL = $env:DATABASE_URL
 
+# Set Mapbox token from appsettings.json
+try {
+    $appsettingsPath = Join-Path $PSScriptRoot "Traffic_Frontend\appsettings.json"
+    if (Test-Path $appsettingsPath) {
+        $appsettings = Get-Content $appsettingsPath | ConvertFrom-Json
+        if ($appsettings.Mapbox.AccessToken) {
+            $env:MAPBOX_ACCESS_TOKEN = $appsettings.Mapbox.AccessToken
+            Write-Host "✓ Mapbox token loaded from appsettings.json" -ForegroundColor Green
+        }
+    }
+} catch {
+    Write-Host "⚠️  Could not load Mapbox token from appsettings.json" -ForegroundColor Yellow
+}
+
 # Check if virtual environment exists
 $venvPath = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPath)) {
