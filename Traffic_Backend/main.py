@@ -530,6 +530,8 @@ from .routers.vehicles import router as vehicles_router
 from .routers.analytics import router as analytics_router
 from .routers.ai import router as ai_router
 from .routers.construction import router as construction_router
+from .routers.permission_requests import router as permission_requests_router
+
 app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(routes_router)
@@ -540,4 +542,5 @@ app.include_router(vehicles_router)
 app.include_router(analytics_router)
 app.include_router(ai_router)
 app.include_router(construction_router)
+app.include_router(permission_requests_router, prefix="/api", tags=["Permission Requests"])
 
