@@ -198,6 +198,68 @@ class AuditLogResponse(BaseModel):
 
 
 # =====================================================
+# APPROVAL/REJECTION SCHEMAS (Module 2)
+# =====================================================
+
+class RequestApprovalSchema(BaseModel):
+    """Schema for admin approval of requests"""
+    approval_comments: Optional[str] = Field(None, max_length=1000, description="Optional approval comments")
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RequestRejectionSchema(BaseModel):
+    """Schema for admin rejection of requests"""
+    rejection_reason: str = Field(..., min_length=10, max_length=500, description="Reason for rejection (required)")
+    
+    @field_validator('rejection_reason')
+    @classmethod
+    def validate_rejection_reason(cls, v: str) -> str:
+        """Ensure rejection reason is meaningful"""
+        if not v.strip() or len(v.strip()) < 10:
+            raise ValueError("Rejection reason must be at least 10 characters and meaningful")
+        return v
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminDashboardSummary(BaseModel):
+    """Summary statistics for admin dashboard"""
+    total_pending: int
+    total_under_review: int
+    total_approved: int
+    total_rejected: int
+    pending_requests_summary: List[RoutePermissionRequestSummary]
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApprovalResponse(BaseModel):
+    """Response after successful approval"""
+    id: int
+    request_number: str
+    status: str
+    message: str
+    approved_date: datetime
+    reviewer_comments: Optional[str]
+    next_phase: str = "observation"
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RejectionResponse(BaseModel):
+    """Response after successful rejection"""
+    id: int
+    request_number: str
+    status: str
+    message: str
+    reviewed_date: datetime
+    rejection_reason: str
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+# =====================================================
 # ERROR RESPONSES
 # =====================================================
 

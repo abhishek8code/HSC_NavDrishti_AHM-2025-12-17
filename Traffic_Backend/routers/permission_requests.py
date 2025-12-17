@@ -411,3 +411,249 @@ async def cancel_permission_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to cancel request: {str(e)}"
         )
+
+
+# =====================================================
+# MODULE 2: POLICE ADMIN APPROVAL WORKFLOW
+# =====================================================
+
+@router.patch(
+    "/{request_id}/approve",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Approve permission request",
+    description="Police admin approves a pending request and moves to observation phase."
+)
+async def approve_permission_request(
+    request_id: int,
+    approval_data: dict,
+    db: Session = Depends(get_db)
+) -> dict:
+    """
+    Approve a pending permission request.
+    
+    **Business Rules:**
+    - Only PENDING requests can be approved
+    - Admin must provide context (optional comments)
+    - Status changes to APPROVED
+    - Automatically moves to observation phase
+    - Creates audit log entry with admin details
+    
+    **Returns:** Confirmation with request details and next phase.
+    """
+    try:
+        from datetime import datetime
+        
+        db_request = db.query(RoutePermissionRequest).filter(RoutePermissionRequest.id == request_id).first()
+        
+        if not db_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Permission request with ID {request_id} not found"
+            )
+        
+        if db_request.status != RequestStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot approve request in '{db_request.status.value}' status. Only PENDING requests can be approved."
+            )
+        
+        # Extract approval comments if provided
+        approval_comments = approval_data.get("approval_comments") if isinstance(approval_data, dict) else getattr(approval_data, "approval_comments", None)
+        
+        # Update request status
+        db_request.status = RequestStatus.APPROVED
+        db_request.reviewed_date = datetime.utcnow()
+        db_request.approved_date = datetime.utcnow()
+        db_request.reviewer_comments = approval_comments
+        db_request.updated_date = datetime.utcnow()
+        db.commit()
+        
+        # Create audit log
+        create_audit_log(
+            db=db,
+            action=AuditAction.REQUEST_APPROVED,
+            permission_request_id=request_id,
+            description=f"Request {db_request.request_number} approved by police admin",
+            audit_metadata={
+                "approval_date": datetime.utcnow().isoformat(),
+                "approval_comments": approval_comments,
+                "next_phase": "observation"
+            }
+        )
+        
+        logger.info(f"✓ Request {db_request.request_number} APPROVED → Moving to observation phase")
+        
+        return {
+            "id": db_request.id,
+            "request_number": db_request.request_number,
+            "status": "approved",
+            "message": "Permission request approved successfully",
+            "approved_date": db_request.approved_date.isoformat(),
+            "reviewer_comments": approval_comments,
+            "next_phase": "observation",
+            "event_name": db_request.event_name,
+            "event_date": db_request.event_date.isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error approving request {request_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to approve request: {str(e)}"
+        )
+
+
+@router.patch(
+    "/{request_id}/reject",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Reject permission request",
+    description="Police admin rejects a pending request with reason."
+)
+async def reject_permission_request(
+    request_id: int,
+    rejection_data: dict,
+    db: Session = Depends(get_db)
+) -> dict:
+    """
+    Reject a pending permission request.
+    
+    **Business Rules:**
+    - Only PENDING requests can be rejected
+    - Rejection reason is required (min 10 chars)
+    - Status changes to REJECTED
+    - Reason is stored for citizen feedback
+    - Creates audit log entry with rejection details
+    
+    **Returns:** Confirmation with rejection details.
+    """
+    try:
+        from datetime import datetime
+        
+        db_request = db.query(RoutePermissionRequest).filter(RoutePermissionRequest.id == request_id).first()
+        
+        if not db_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Permission request with ID {request_id} not found"
+            )
+        
+        if db_request.status != RequestStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot reject request in '{db_request.status.value}' status. Only PENDING requests can be rejected."
+            )
+        
+        # Extract rejection reason
+        rejection_reason = rejection_data.get("rejection_reason") if isinstance(rejection_data, dict) else getattr(rejection_data, "rejection_reason", None)
+        
+        if not rejection_reason or len(str(rejection_reason).strip()) < 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rejection reason is required and must be at least 10 characters"
+            )
+        
+        # Update request status
+        db_request.status = RequestStatus.REJECTED
+        db_request.reviewed_date = datetime.utcnow()
+        db_request.rejection_reason = rejection_reason
+        db_request.updated_date = datetime.utcnow()
+        db.commit()
+        
+        # Create audit log
+        create_audit_log(
+            db=db,
+            action=AuditAction.REQUEST_REJECTED,
+            permission_request_id=request_id,
+            description=f"Request {db_request.request_number} rejected by police admin",
+            audit_metadata={
+                "rejection_date": datetime.utcnow().isoformat(),
+                "rejection_reason": rejection_reason
+            }
+        )
+        
+        logger.info(f"✓ Request {db_request.request_number} REJECTED - Reason: {rejection_reason[:50]}...")
+        
+        return {
+            "id": db_request.id,
+            "request_number": db_request.request_number,
+            "status": "rejected",
+            "message": "Permission request rejected",
+            "reviewed_date": db_request.reviewed_date.isoformat(),
+            "rejection_reason": rejection_reason,
+            "event_name": db_request.event_name,
+            "event_date": db_request.event_date.isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error rejecting request {request_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reject request: {str(e)}"
+        )
+
+
+@router.get(
+    "/admin/dashboard-summary",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Get admin dashboard summary",
+    description="Get summary statistics and pending requests for admin dashboard."
+)
+async def get_admin_dashboard_summary(
+    db: Session = Depends(get_db)
+) -> dict:
+    """
+    Get dashboard summary for police admin.
+    
+    **Returns:** Statistics on request statuses and list of pending requests.
+    """
+    try:
+        from Traffic_Backend.schemas.permission_schemas import RoutePermissionRequestSummary
+        
+        # Get counts by status
+        total_pending = db.query(RoutePermissionRequest).filter(RoutePermissionRequest.status == RequestStatus.PENDING).count()
+        total_under_review = db.query(RoutePermissionRequest).filter(RoutePermissionRequest.status == RequestStatus.UNDER_REVIEW).count()
+        total_approved = db.query(RoutePermissionRequest).filter(RoutePermissionRequest.status == RequestStatus.APPROVED).count()
+        total_rejected = db.query(RoutePermissionRequest).filter(RoutePermissionRequest.status == RequestStatus.REJECTED).count()
+        
+        # Get pending requests (priority for admin)
+        pending_requests = db.query(RoutePermissionRequest).filter(
+            RoutePermissionRequest.status == RequestStatus.PENDING
+        ).order_by(RoutePermissionRequest.submitted_date.asc()).limit(10).all()
+        
+        return {
+            "total_pending": total_pending,
+            "total_under_review": total_under_review,
+            "total_approved": total_approved,
+            "total_rejected": total_rejected,
+            "pending_requests_summary": [
+                {
+                    "id": req.id,
+                    "request_number": req.request_number,
+                    "status": req.status.value,
+                    "citizen_name": req.citizen_name,
+                    "event_type": req.event_type.value,
+                    "event_name": req.event_name,
+                    "event_date": req.event_date.isoformat(),
+                    "submitted_date": req.submitted_date.isoformat(),
+                    "expected_participants": req.expected_participants
+                }
+                for req in pending_requests
+            ],
+            "summary_generated": datetime.utcnow().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting dashboard summary: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get dashboard summary: {str(e)}"
+        )

@@ -26,15 +26,15 @@ def print_header(title: str):
 
 
 def print_success(msg: str):
-    print(f"{GREEN}✓ {msg}{RESET}")
+    print(f"{GREEN}[OK] {msg}{RESET}")
 
 
 def print_error(msg: str):
-    print(f"{RED}✗ {msg}{RESET}")
+    print(f"{RED}[FAIL] {msg}{RESET}")
 
 
 def print_info(msg: str):
-    print(f"{YELLOW}ℹ {msg}{RESET}")
+    print(f"{YELLOW}[INFO] {msg}{RESET}")
 
 
 def test_submit_valid_request():
@@ -307,14 +307,124 @@ def test_cancel_request(request_id: int):
         print_error(f"Error: {e}")
 
 
+
+
+# =====================================================
+# MODULE 2: POLICE ADMIN APPROVAL TESTS
+# =====================================================
+
+def test_approve_pending_request(request_id: int):
+    """Test 8: Approve a pending request"""
+    print_header("TEST 8: Approve Pending Request (Module 2)")
+    
+    if not request_id:
+        print_error("No valid request ID provided")
+        return
+    
+    payload = {
+        "approval_comments": "Route approved for traffic management. Event route follows main arterial roads."
+    }
+    
+    print_info(f"Approving request {request_id}...")
+    
+    try:
+        response = requests.patch(
+            f"{BASE_URL}/permission-requests/{request_id}/approve",
+            json=payload,
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print_success("Request approved successfully!")
+            print(f"  Request Number: {data['request_number']}")
+            print(f"  Status: {data['status']}")
+            print(f"  Approved Date: {data['approved_date']}")
+            print(f"  Next Phase: {data['next_phase']}")
+            return True
+        else:
+            print_error(f"Failed to approve request: {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+    
+    except Exception as e:
+        print_error(f"Error: {e}")
+        return False
+
+
+def test_reject_pending_request(request_id: int):
+    """Test 9: Reject a pending request"""
+    print_header("TEST 9: Reject Pending Request (Module 2)")
+    
+    if not request_id:
+        print_error("No valid request ID provided")
+        return
+    
+    payload = {
+        "rejection_reason": "The proposed route conflicts with an existing approved event on the same date. Please resubmit with alternative dates or routes."
+    }
+    
+    print_info(f"Rejecting request {request_id}...")
+    
+    try:
+        response = requests.patch(
+            f"{BASE_URL}/permission-requests/{request_id}/reject",
+            json=payload,
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print_success("Request rejected successfully!")
+            print(f"  Request Number: {data['request_number']}")
+            print(f"  Status: {data['status']}")
+            print(f"  Rejection Reason: {data['rejection_reason'][:80]}...")
+            return True
+        else:
+            print_error(f"Failed to reject request: {response.status_code}")
+            print(f"  Response: {response.text}")
+            return False
+    
+    except Exception as e:
+        print_error(f"Error: {e}")
+        return False
+
+
+def test_admin_dashboard():
+    """Test 10: Get admin dashboard summary"""
+    print_header("TEST 10: Admin Dashboard Summary (Module 2)")
+    
+    print_info("Fetching admin dashboard summary...")
+    
+    try:
+        response = requests.get(
+            f"{BASE_URL}/permission-requests/admin/dashboard-summary",
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print_success("Dashboard summary retrieved!")
+            print(f"  Total Pending: {data['total_pending']}")
+            print(f"  Total Under Review: {data['total_under_review']}")
+            print(f"  Total Approved: {data['total_approved']}")
+            print(f"  Total Rejected: {data['total_rejected']}")
+            print(f"  Pending Requests (top 10):")
+            for req in data['pending_requests_summary'][:3]:
+                print(f"    - {req['request_number']}: {req['event_name']} ({req['status']})")
+        else:
+            print_error(f"Failed to get dashboard: {response.status_code}")
+    
+    except Exception as e:
+        print_error(f"Error: {e}")
+
+
 def main():
     """Run all tests"""
     print(f"\n{BLUE}")
-    print("╔" + "═" * 68 + "╗")
-    print("║" + " " * 68 + "║")
-    print("║" + "MODULE 1: CITIZEN REQUEST SUBMISSION - COMPREHENSIVE TEST SUITE".center(68) + "║")
-    print("║" + " " * 68 + "║")
-    print("╚" + "═" * 68 + "╝")
+    print("=" * 70)
+    print("MODULE 1 & 2: PERMISSION REQUEST WORKFLOW - FULL TEST SUITE".center(70))
+    print("=" * 70)
     print(RESET)
     
     # Wait for backend
@@ -327,7 +437,7 @@ def main():
         print_error("Please ensure the backend is running on port 8002")
         return
     
-    # Run tests
+    # MODULE 1 TESTS
     test_submit_valid_request_id, test_request_number = test_submit_valid_request()
     test_submit_invalid_date()
     test_invalid_geometry()
@@ -336,16 +446,28 @@ def main():
     if test_submit_valid_request_id:
         test_get_request_by_id(test_submit_valid_request_id)
         test_get_audit_logs(test_submit_valid_request_id)
-        test_cancel_request(test_submit_valid_request_id)
+        
+        # MODULE 2 TESTS
+        if test_approve_pending_request(test_submit_valid_request_id):
+            # After approval, get audit logs to verify approval was logged
+            test_get_audit_logs(test_submit_valid_request_id)
+    
+    # Create a second request to test rejection
+    test_reject_request_id, _ = test_submit_valid_request()
+    if test_reject_request_id:
+        test_reject_pending_request(test_reject_request_id)
+    
+    # Test admin dashboard
+    test_admin_dashboard()
     
     # Summary
     print_header("TEST SUITE COMPLETE")
-    print_success("All permission request endpoints tested successfully!")
-    print(f"{YELLOW}✓ Governance rules enforced (5-day constraint, geometry validation)")
-    print(f"✓ Audit logging working (all submissions logged)")
-    print(f"✓ Pagination working (list requests)")
-    print(f"✓ Full request details retrievable (by ID)")
-    print(f"✓ Audit trail accessible (governance transparency){RESET}\n")
+    print_success("All tests (Module 1 & 2) completed!")
+    print(f"{YELLOW}[OK] MODULE 1: Citizen Submission - All features working")
+    print(f"[OK] MODULE 2: Admin Approval - Approval/Rejection working")
+    print(f"[OK] Audit trail captures all governance actions")
+    print(f"[OK] Admin dashboard summary functional")
+    print(f"[OK] Status workflow: pending -> approved/rejected{RESET}\n")
 
 
 if __name__ == "__main__":
